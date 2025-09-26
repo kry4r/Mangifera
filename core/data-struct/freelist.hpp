@@ -8,7 +8,7 @@
 #include <utility>
 #include <type_traits>
 
-namespace mg::core
+namespace mango::core
 {
     template<typename T>
     class Freelist
