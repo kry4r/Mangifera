@@ -3,47 +3,70 @@
 #include <vector>
 #include <string>
 #include <algorithm>
-#include "base/entity.hpp"
+#include "core/base/entity.hpp"
 
 namespace mango::core
 {
+    static std::size_t node_count = -1;
     struct Scene_Node: public std::enable_shared_from_this<Scene_Node>
     {
-        Entity entity;
+        std::size_t id;
         std::string name;
         std::shared_ptr<Scene_Node> parent;
         std::shared_ptr<Scene_Node> next;
         std::shared_ptr<Scene_Node> children;
 
-        explicit Scene_Node(Entity e): entity(e)
+        Scene_Node()
         {
-            name  = "Node" + std::to_string(e.id);
+            node_count ++;
+            id = node_count;
+            name = "Node" + std::to_string(id);
         }
 
-        auto add_child(std::shared_ptr<Scene_Node> child) -> void
+        Scene_Node(const Scene_Node& other)
+            : id(other.id),
+            name(other.name),
+            parent(other.parent),
+            next(other.next),
+            children(other.children)
         {
-            child->parent = shared_from_this();
         }
 
-        auto remove_child(const std::shared_ptr<Scene_Node>& child) -> void
+        Scene_Node(Scene_Node&& other) noexcept
+            : id(other.id),
+            name(std::move(other.name)),
+            parent(std::move(other.parent)),
+            next(std::move(other.next)),
+            children(std::move(other.children))
         {
-
+            other.id = 0;
         }
 
-        auto find_child(Entity entity) -> std::shared_ptr<Scene_Node>
+        Scene_Node& operator=(const Scene_Node& other)
         {
-
-        }
-
-        auto get_node_path() -> std::string
-        {
-            std::string path = "";
-            path += name;
-            auto node = parent;
-            while( node->entity.id != 0)
-            {
-                path = node->name + "/" + path;
+            if (this != &other) {
+                id = other.id;
+                name = other.name;
+                parent = other.parent;
+                next = other.next;
+                children = other.children;
             }
+            return *this;
+        }
+
+        Scene_Node& operator=(Scene_Node&& other) noexcept
+        {
+            if (this != &other) {
+                id = other.id;
+                name = std::move(other.name);
+                parent = std::move(other.parent);
+                next = std::move(other.next);
+                children = std::move(other.children);
+
+                other.id = 0;
+            }
+            return *this;
         }
     };
+
 }

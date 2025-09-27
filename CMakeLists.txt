@@ -4,7 +4,7 @@ project(Mangifera)
 set(CMAKE_CXX_STANDARD 17)
 find_package(Vulkan REQUIRED)
 
-include_directories(core)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 file(GLOB CORE_SOURCES "core/**/*.cpp")
 

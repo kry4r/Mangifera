@@ -1,4 +1,5 @@
 #pragma once
+#include "core/base/entity.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <new>        // Required for placement new and operator new[]/delete[]
@@ -10,8 +11,83 @@
 
 namespace mango::core
 {
+    struct EntityList
+    {
+    private:
+        struct EntityNode
+        {
+            std::uint32_t next;
+        };
+
+        std::vector<Entity> data_;
+        std::vector<std::uint32_t> generations_;
+        std::uint32_t free_head_;
+        std::uint32_t size_;
+        static constexpr std::uint32_t INVALID_INDEX = 0xFFFFFFFF;
+
+    public:
+        EntityList(): free_head_(INVALID_INDEX), size_(0) {}
+
+        Entity allocate()
+        {
+            std::uint32_t index;
+            if (free_head_ != INVALID_INDEX) {
+                index = free_head_;
+                free_head_ = reinterpret_cast<EntityNode*>(&data_[index])->next;
+            } else {
+                index = static_cast<std::uint32_t>(data_.size());
+                data_.emplace_back();
+                generations_.push_back(0);
+            }
+            size_++;
+
+            Entity e;
+            e.set_index(index);
+            e.set_generation(generations_[index]);
+            return e;
+        }
+
+        template<typename... Args>
+        Entity allocate(Args&&... args)
+        {
+            Entity e = allocate();
+            new (&data_[e.get_index()]) T(std::forward<Args>(args)...);
+            return e;
+        }
+
+        bool deallocate(Entity e)
+        {
+            std::uint32_t index = e.get_index();
+            if (index >= data_.size()) return false;
+
+            data_[index].~Entity();
+            generations_[index]++; // bump generation
+            reinterpret_cast<EntityNode*>(&data_[index])->next = free_head_;
+            free_head_ = index;
+            size_--;
+            return true;
+        }
+
+        bool exists(Entity e) const
+        {
+            std::uint32_t index = e.get_index();
+            if (index >= data_.size()) return false;
+            return generations_[index] == e.get_generation();
+        }
+
+        Entity* get(Entity e)
+        {
+            return exists(e) ? &data_[e.get_index()] : nullptr;
+        }
+
+        auto get_count() -> int
+        {
+            return size_;
+        }
+    };
+
     template<typename T>
-    class Freelist
+    struct Freelist
     {
     private:
         struct FreeNode
@@ -83,4 +159,5 @@ namespace mango::core
             size_ = 0;
         }
     };
+
 }
