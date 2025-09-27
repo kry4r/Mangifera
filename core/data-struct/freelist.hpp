@@ -1,5 +1,5 @@
 #pragma once
-#include "core/base/entity.hpp"
+#include "base/entity.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <new>        // Required for placement new and operator new[]/delete[]

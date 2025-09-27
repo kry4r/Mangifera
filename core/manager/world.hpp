@@ -1,9 +1,9 @@
 #pragma once
-#include "core/base/entity.hpp"
-#include "core/base/twig.hpp"
-#include "core/data-struct/freelist.hpp"
-#include "core/data-struct/singleton.hpp"
-#include "core/log/historiographer.hpp"
+#include "base/entity.hpp"
+#include "base/twig.hpp"
+#include "data-struct/freelist.hpp"
+#include "data-struct/singleton.hpp"
+#include "log/historiographer.hpp"
 #include <unordered_map>
 #include <unordered_set>
 #include <memory>

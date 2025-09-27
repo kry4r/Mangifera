@@ -1,5 +1,5 @@
 #pragma once
-#include "core/base/entity.hpp"
+#include "base/entity.hpp"
 #include "twig.hpp"
 #include <functional>
 #include <vector>

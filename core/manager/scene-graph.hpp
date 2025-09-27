@@ -1,8 +1,8 @@
 #pragma once
-#include "core/data-struct/freelist.hpp"
-#include "core/data-struct/scene-node.hpp"
-#include "core/data-struct/singleton.hpp"
-#include "core/base/gardener.hpp"
+#include "data-struct/freelist.hpp"
+#include "data-struct/scene-node.hpp"
+#include "data-struct/singleton.hpp"
+#include "base/gardener.hpp"
 #include <unordered_map>
 #include <memory>
 #include <vector>

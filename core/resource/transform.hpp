@@ -1,6 +1,6 @@
 #pragma once
-#include "core/base/twig.hpp"
-#include "core/math/math.hpp"
+#include "base/twig.hpp"
+#include "math/math.hpp"
 
 namespace mango::resource
 {

@@ -3,7 +3,7 @@
 #include <vector>
 #include <string>
 #include <algorithm>
-#include "core/base/entity.hpp"
+#include "base/entity.hpp"
 
 namespace mango::core
 {

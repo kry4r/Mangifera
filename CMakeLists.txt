@@ -4,13 +4,16 @@ project(Mangifera)
 set(CMAKE_CXX_STANDARD 17)
 find_package(Vulkan REQUIRED)
 
+message(STATUS "Vulkan include: ${Vulkan_INCLUDE_DIRS}")
+message(STATUS "Vulkan library: ${Vulkan_LIBRARIES}")
+
+add_subdirectory(core)
 add_subdirectory(3rdparty/glm)
 add_subdirectory(3rdparty/imgui)
+add_subdirectory(3rdparty/glfw)
 
-include_directories(3rdparty/glm)
-include_directories(3rdparty/imgui)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+#file(GLOB CORE_SOURCES "core/**/*.cpp")
 
-file(GLOB CORE_SOURCES "core/**/*.cpp")
+add_executable(Mangifera Mangifera.cpp core)
 
-add_executable(Mangifera Mangifera.cpp ${CORE_SOURCES})
+target_link_libraries(Mangifera PRIVATE core glm imgui ${Vulkan_LIBRARIES} glfw)
