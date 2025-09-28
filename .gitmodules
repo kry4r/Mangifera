@@ -8,3 +8,6 @@
 [submodule "3rdparty/glfw"]
 	path = 3rdparty/glfw
 	url = https://github.com/glfw/glfw.git
+[submodule "3rdparty/shaderc"]
+	path = 3rdparty/shaderc
+	url = https://github.com/kry4r/shaderc.git

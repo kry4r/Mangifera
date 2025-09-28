@@ -14,7 +14,9 @@ add_subdirectory(3rdparty/glfw)
 
 set(SHADERC_SKIP_TESTS ON CACHE BOOL "Skip building tests" FORCE)
 set(SHADERC_SKIP_EXAMPLES ON CACHE BOOL "Skip building examples" FORCE)
-set(SHADERC_SKIP_INSTALL ON CACHE BOOL "Skip install" FORCE)
+set(SHADERC_SKIP_INSTALL ON CACHE BOOL "Skip shaderc install" FORCE)
+set(CMAKE_SKIP_INSTALL_RULES ON CACHE BOOL "Skip all install() rules" FORCE)
+
 add_subdirectory(3rdparty/shaderc)
 
 #file(GLOB CORE_SOURCES "core/**/*.cpp")
