@@ -12,6 +12,11 @@ add_subdirectory(3rdparty/glm)
 add_subdirectory(3rdparty/imgui)
 add_subdirectory(3rdparty/glfw)
 
+set(SHADERC_SKIP_TESTS ON CACHE BOOL "Skip building tests" FORCE)
+set(SHADERC_SKIP_EXAMPLES ON CACHE BOOL "Skip building examples" FORCE)
+set(SHADERC_SKIP_INSTALL ON CACHE BOOL "Skip install" FORCE)
+add_subdirectory(3rdparty/shaderc)
+
 #file(GLOB CORE_SOURCES "core/**/*.cpp")
 
 add_executable(Mangifera Mangifera.cpp core)
