@@ -7,7 +7,6 @@ find_package(Vulkan REQUIRED)
 message(STATUS "Vulkan include: ${Vulkan_INCLUDE_DIRS}")
 message(STATUS "Vulkan library: ${Vulkan_LIBRARIES}")
 
-add_subdirectory(core)
 add_subdirectory(3rdparty/glm)
 add_subdirectory(3rdparty/imgui)
 add_subdirectory(3rdparty/glfw)
@@ -19,8 +18,11 @@ set(CMAKE_SKIP_INSTALL_RULES ON CACHE BOOL "Skip all install() rules" FORCE)
 
 add_subdirectory(3rdparty/shaderc)
 
+add_subdirectory(core)
+add_subdirectory(graphics)
+
 #file(GLOB CORE_SOURCES "core/**/*.cpp")
 
 add_executable(Mangifera Mangifera.cpp core)
 
-target_link_libraries(Mangifera PRIVATE core glm imgui ${Vulkan_LIBRARIES} glfw)
+target_link_libraries(Mangifera PRIVATE core glm imgui ${Vulkan_LIBRARIES} glfw graphics)

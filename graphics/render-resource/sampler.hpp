@@ -1,4 +1,4 @@
-
+#include <memory>
 namespace mango::graphics
 {
     enum struct Filter_Mode {
@@ -24,4 +24,6 @@ namespace mango::graphics
         virtual ~Sampler() = default;
         virtual auto getDesc() const -> Sampler_Desc& = 0;
     };
+
+    using Sampler_Handle = std::shared_ptr<Sampler>;
 } // namespace mango::graphics

@@ -1,5 +1,6 @@
 #include <string>
 #include <vector>
+#include <memory>
 namespace mango::graphics
 {
     enum class Shader_Type {
@@ -15,7 +16,7 @@ namespace mango::graphics
 
     struct Shader_Desc {
         Shader_Type type;
-        std::string entryPoint = "main";
+        std::string entry_point = "main";
         std::vector<uint32_t> bytecode; // SPIR-V binary
     };
 
@@ -24,4 +25,6 @@ namespace mango::graphics
         virtual ~Shader() = default;
         virtual const Shader_Desc& getDesc() const = 0;
     };
+
+    using Sampler_Handle = std::shared_ptr<Shader>;
 }

@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <string>
+#include <memory>
 
 namespace mango::graphics
 {
@@ -31,4 +32,6 @@ namespace mango::graphics
         virtual ~Buffer() = default;
         virtual auto get_buffer_desc() const -> Buffer_Desc& = 0;
     };
+
+    using Buffer_Handle = std::shared_ptr<Buffer>;
 }

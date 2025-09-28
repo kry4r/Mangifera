@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <memory>
 
 namespace mango::graphics
 {
@@ -66,10 +67,10 @@ namespace mango::graphics
         uint32_t width = 1;
         uint32_t height = 1;
         uint32_t depth = 1;
-        uint32_t mipLevels = 1;
+        uint32_t mip_levels = 1;
         uint32_t arrayLayers = 1;
         bool sampled = true;
-        bool renderTarget = false;
+        bool render_target = false;
     };
 
     class Texture {
@@ -77,4 +78,6 @@ namespace mango::graphics
         virtual ~Texture() = default;
         virtual auto getDesc() const -> Texture_Desc& = 0;
     };
+
+    using Texture_Handle = std::shared_ptr<Texture>;
 }
