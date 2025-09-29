@@ -16,6 +16,7 @@ namespace mango::graphics
     enum struct Memory_Type
     {
         gpu_only,
+        cpu_only,
         cpu2gpu,
         gpu2cpu,
     };
