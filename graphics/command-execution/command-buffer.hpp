@@ -2,7 +2,7 @@
 #include <memory>
 #include <vector>
 #include <cstdint>
-#include "pipeline-state.hpp"
+#include "pipeline-state/pipeline-state.hpp"
 #include "sync/barrier.hpp"
 #include "render-resource/buffer.hpp"
 #include "render-resource/texture.hpp"

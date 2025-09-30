@@ -1,3 +1,4 @@
+#pragma once
 #include <string>
 #include <vector>
 #include <memory>
@@ -26,5 +27,5 @@ namespace mango::graphics
         virtual const Shader_Desc& getDesc() const = 0;
     };
 
-    using Sampler_Handle = std::shared_ptr<Shader>;
+    using Shader_Handle = std::shared_ptr<Shader>;
 }

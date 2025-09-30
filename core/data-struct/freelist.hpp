@@ -51,7 +51,7 @@ namespace mango::core
         Entity allocate(Args&&... args)
         {
             Entity e = allocate();
-            new (&data_[e.get_index()]) T(std::forward<Args>(args)...);
+            new (&data_[e.get_index()]) Entity(std::forward<Args>(args)...);
             return e;
         }
 

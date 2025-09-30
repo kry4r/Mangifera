@@ -1,7 +1,7 @@
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.16)
 project(Mangifera)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 find_package(Vulkan REQUIRED)
 
 message(STATUS "Vulkan include: ${Vulkan_INCLUDE_DIRS}")
@@ -16,6 +16,15 @@ set(SHADERC_SKIP_EXAMPLES ON CACHE BOOL "Skip building examples" FORCE)
 set(SHADERC_SKIP_INSTALL ON CACHE BOOL "Skip shaderc install" FORCE)
 set(CMAKE_SKIP_INSTALL_RULES ON CACHE BOOL "Skip all install() rules" FORCE)
 
+if(WIN32)
+    add_definitions(-DVK_USE_PLATFORM_WIN32_KHR)
+elseif(UNIX AND NOT APPLE)
+    add_definitions(-DVK_USE_PLATFORM_XCB_KHR)
+    # add_definitions(-DVK_USE_PLATFORM_XLIB_KHR)
+elseif(APPLE)
+    add_definitions(-DVK_USE_PLATFORM_METAL_EXT)
+endif()
+
 add_subdirectory(3rdparty/shaderc)
 
 add_subdirectory(core)
@@ -25,4 +34,4 @@ add_subdirectory(graphics)
 
 add_executable(Mangifera Mangifera.cpp core)
 
-target_link_libraries(Mangifera PRIVATE core glm imgui ${Vulkan_LIBRARIES} glfw graphics)
+target_link_libraries(Mangifera PRIVATE core glm imgui ${Vulkan_LIBRARIES} glfw graphics Vulkan::Vulkan)

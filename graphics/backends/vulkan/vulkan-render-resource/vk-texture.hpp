@@ -1,7 +1,11 @@
-// vk_texture.h
 #pragma once
 #include "render-resource/texture.hpp"
 #include <vulkan/vulkan.h>
+#include <memory>
+
+namespace mango::graphics {
+    class Command_Buffer;
+}
 
 namespace mango::graphics::vk {
 
@@ -16,7 +20,7 @@ public:
     Vk_Texture(Vk_Texture&& other) noexcept;
     Vk_Texture& operator=(Vk_Texture&& other) noexcept;
 
-    auto getDesc() const -> Texture_Desc& override {
+    auto getDesc() const -> const Texture_Desc& override {
         return m_desc;
     }
 
@@ -26,15 +30,16 @@ public:
     auto get_vk_format() const -> VkFormat { return m_vk_format; }
     auto get_current_layout() const -> VkImageLayout { return m_current_layout; }
 
-    // TODO: Need Command Buffer
-    void upload(VkCommandBuffer cmd, const void* data, std::size_t size,
+    void upload(std::shared_ptr<Command_Buffer> cmd, const void* data, std::size_t size,
                 uint32_t mip_level = 0, uint32_t array_layer = 0);
 
-    void transition_layout(VkCommandBuffer cmd, VkImageLayout new_layout,
+    void transition_layout(std::shared_ptr<Command_Buffer> cmd, VkImageLayout new_layout,
                           VkPipelineStageFlags src_stage,
                           VkPipelineStageFlags dst_stage);
 
-    void generate_mipmaps(VkCommandBuffer cmd);
+    void generate_mipmaps(std::shared_ptr<Command_Buffer> cmd);
+
+    std::size_t get_data_size(uint32_t mip_level = 0) const;
 
 private:
     VkDevice m_device = VK_NULL_HANDLE;
@@ -45,7 +50,7 @@ private:
     VkFormat m_vk_format = VK_FORMAT_UNDEFINED;
     VkImageLayout m_current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
 
-    mutable Texture_Desc m_desc;
+    Texture_Desc m_desc;
 
     auto to_vk_format(Texture_Format format) const -> VkFormat;
     auto to_vk_image_type() const -> VkImageType;
@@ -54,6 +59,7 @@ private:
     auto get_image_aspect_flags() const -> VkImageAspectFlags;
     auto is_depth_format() const -> bool;
     auto is_stencil_format() const -> bool;
+    auto get_format_size() const -> uint32_t; // 每像素字节数
 
     auto find_memory_type(uint32_t type_filter,
                          VkMemoryPropertyFlags properties) const -> uint32_t;

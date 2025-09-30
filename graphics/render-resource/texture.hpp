@@ -76,7 +76,7 @@ namespace mango::graphics
     class Texture {
     public:
         virtual ~Texture() = default;
-        virtual auto getDesc() const -> Texture_Desc& = 0;
+        virtual auto getDesc() const -> const Texture_Desc& = 0;
     };
 
     using Texture_Handle = std::shared_ptr<Texture>;

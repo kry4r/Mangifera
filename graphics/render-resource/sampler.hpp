@@ -1,3 +1,4 @@
+#pragma once
 #include <memory>
 namespace mango::graphics
 {
@@ -22,7 +23,7 @@ namespace mango::graphics
     class Sampler {
     public:
         virtual ~Sampler() = default;
-        virtual auto getDesc() const -> Sampler_Desc& = 0;
+        virtual auto getDesc() const -> const Sampler_Desc& = 0;
     };
 
     using Sampler_Handle = std::shared_ptr<Sampler>;

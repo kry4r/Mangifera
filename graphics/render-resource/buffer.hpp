@@ -31,7 +31,7 @@ namespace mango::graphics
     struct Buffer
     {
         virtual ~Buffer() = default;
-        virtual auto get_buffer_desc() const -> Buffer_Desc& = 0;
+        virtual auto get_buffer_desc() const -> const Buffer_Desc& = 0;
     };
 
     using Buffer_Handle = std::shared_ptr<Buffer>;
