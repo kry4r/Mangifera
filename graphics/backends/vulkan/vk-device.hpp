@@ -1,12 +1,13 @@
 #pragma once
 #include "device.hpp"
+#include "vulkan-render-resource/vk-descriptor-set.hpp"
 #include <vulkan/vulkan.h>
 #include <vector>
 #include <string>
 
 namespace mango::graphics::vk
 {
-    class Vk_Device : public Device
+    class Vk_Device: public Device
     {
     public:
         explicit Vk_Device(const Device_Desc& desc);
@@ -59,8 +60,14 @@ namespace mango::graphics::vk
         auto get_transfer_queue() const -> VkQueue { return m_transfer_queue; }
 
         Command_Pool_Handle create_command_pool_for_queue_family(uint32_t queue_family_index,
-                                                          bool transient = false,
-                                                          bool reset_command_buffer = true);
+            bool transient = false,
+            bool reset_command_buffer = true);
+
+        Descriptor_Set_Layout_Handle create_descriptor_set_layout(
+            const Descriptor_Set_Layout_Desc& desc) override;
+
+        Descriptor_Set_Handle create_descriptor_set(
+            std::shared_ptr<Descriptor_Set_Layout> layout) override;
 
     private:
         // ========== Initialization methods ==========
@@ -107,6 +114,9 @@ namespace mango::graphics::vk
         const std::vector<const char*> m_validation_layers = {
             "VK_LAYER_KHRONOS_validation"
         };
+
+        std::unique_ptr<Vk_Descriptor_Pool> m_descriptor_pool;
+        void create_default_descriptor_pool();
     };
 
 } // namespace mango::graphics::vk

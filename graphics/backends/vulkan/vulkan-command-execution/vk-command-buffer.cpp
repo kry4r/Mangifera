@@ -2,6 +2,7 @@
 #include "vk-command-buffer.hpp"
 #include "vulkan-render-resource/vk-buffer.hpp"
 #include "vulkan-render-resource/vk-texture.hpp"
+#include "vulkan-render-resource/vk-descriptor-set.hpp"
 #include "vulkan-render-pass/vk-render-pass.hpp"
 #include "vulkan-render-pass/vk-framebuffer.hpp"
 #include "vulkan-pipeline-state/vk-compute-pipeline-state.hpp"
@@ -188,13 +189,15 @@ namespace mango::graphics::vk
         }
     }
 
-    void Vk_Command_Buffer::bind_descriptor_set(uint32_t set_index, std::shared_ptr<Descriptor_Set> set)
+    void Vk_Command_Buffer::bind_descriptor_set(uint32_t set_index,
+        std::shared_ptr<Descriptor_Set> set)
     {
-        // TODO: Need to implement Vk_Descriptor_Set
-        UH_ERROR("bind_descriptor_set not implemented yet");
-
-        /*
         auto vk_set = std::dynamic_pointer_cast<Vk_Descriptor_Set>(set);
+        if (!vk_set) {
+            UH_ERROR("Invalid descriptor set type for Vulkan command buffer");
+            return;
+        }
+
         VkDescriptorSet vk_descriptor_set = vk_set->get_vk_descriptor_set();
 
         vkCmdBindDescriptorSets(
@@ -207,7 +210,6 @@ namespace mango::graphics::vk
             0,
             nullptr
         );
-        */
     }
 
     // ========== Bind vertex/index buffers ==========

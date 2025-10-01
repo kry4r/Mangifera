@@ -16,6 +16,7 @@
 #include "render-resource/texture.hpp"
 #include "render-resource/sampler.hpp"
 #include "render-resource/shader.hpp"
+#include "render-resource/descriptor-set.hpp"
 #include "sync/fence.hpp"
 #include "sync/semaphore.hpp"
 
@@ -56,6 +57,12 @@ namespace mango::graphics
         // Device-level queries
         virtual uint32_t get_queue_family_count() const = 0;
         virtual std::vector<Queue_Type> get_supported_queues() const = 0;
+
+        virtual Descriptor_Set_Layout_Handle create_descriptor_set_layout(
+            const Descriptor_Set_Layout_Desc& desc) = 0;
+
+        virtual Descriptor_Set_Handle create_descriptor_set(
+            std::shared_ptr<Descriptor_Set_Layout> layout) = 0;
 
         // Device synchronization
         virtual void wait_idle() = 0;

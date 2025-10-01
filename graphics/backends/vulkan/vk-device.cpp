@@ -543,4 +543,40 @@ namespace mango::graphics::vk
             vkDeviceWaitIdle(m_device);
         }
     }
+
+    void Vk_Device::create_default_descriptor_pool() {
+    std::vector<Vk_Descriptor_Pool::Pool_Size> pool_sizes = {
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000},
+        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000},
+        {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000},
+        {VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
+    };
+
+    m_descriptor_pool = std::make_unique<Vk_Descriptor_Pool>(
+        m_device, 1000, pool_sizes);
+}
+
+Descriptor_Set_Layout_Handle Vk_Device::create_descriptor_set_layout(
+    const Descriptor_Set_Layout_Desc& desc)
+{
+    return std::make_shared<Vk_Descriptor_Set_Layout>(m_device, desc);
+}
+
+Descriptor_Set_Handle Vk_Device::create_descriptor_set(
+    std::shared_ptr<Descriptor_Set_Layout> layout)
+{
+    auto vk_layout = std::dynamic_pointer_cast<Vk_Descriptor_Set_Layout>(layout);
+    if (!vk_layout) {
+        throw std::runtime_error("Invalid descriptor set layout type");
+    }
+
+    if (!m_descriptor_pool) {
+        create_default_descriptor_pool();
+    }
+
+    return std::make_shared<Vk_Descriptor_Set>(
+        m_device, m_descriptor_pool->get_vk_pool(), vk_layout);
+}
 }
