@@ -103,6 +103,11 @@ namespace mango::graphics::vk
         create_info.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
         create_info.ppEnabledExtensionNames = extensions.data();
 
+        // macOS: Enable portability enumeration
+        #ifdef __APPLE__
+        create_info.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+        #endif
+
         VkDebugUtilsMessengerCreateInfoEXT debug_create_info{};
         if (m_enable_validation) {
             create_info.enabledLayerCount = static_cast<uint32_t>(m_validation_layers.size());
@@ -197,9 +202,58 @@ namespace mango::graphics::vk
         UH_INFO_FMT("Selected GPU: {}", m_device_properties.deviceName);
     }
 
+    void Vk_Device::find_queue_families()
+    {
+        uint32_t queue_family_count = 0;
+        vkGetPhysicalDeviceQueueFamilyProperties(m_physical_device, &queue_family_count, nullptr);
+
+        std::vector<VkQueueFamilyProperties> queue_families(queue_family_count);
+        vkGetPhysicalDeviceQueueFamilyProperties(m_physical_device, &queue_family_count, queue_families.data());
+
+        // Find queue families
+        for (uint32_t i = 0; i < queue_family_count; i++) {
+            const auto& queue_family = queue_families[i];
+
+            // Graphics queue (usually also supports compute and transfer)
+            if (queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+                if (m_graphics_family == UINT32_MAX) {
+                    m_graphics_family = i;
+                    m_present_family = i; // Assume graphics queue can present
+                }
+            }
+
+            // Dedicated compute queue (optional, for better parallelism)
+            if ((queue_family.queueFlags & VK_QUEUE_COMPUTE_BIT) &&
+                !(queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
+                m_compute_family = i;
+            }
+
+            // Dedicated transfer queue (optional, for better parallelism)
+            if ((queue_family.queueFlags & VK_QUEUE_TRANSFER_BIT) &&
+                !(queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT) &&
+                !(queue_family.queueFlags & VK_QUEUE_COMPUTE_BIT)) {
+                m_transfer_family = i;
+            }
+        }
+
+        // Fallback: use graphics queue for compute and transfer if no dedicated queues
+        if (m_compute_family == UINT32_MAX && m_graphics_family != UINT32_MAX) {
+            m_compute_family = m_graphics_family;
+        }
+        if (m_transfer_family == UINT32_MAX && m_graphics_family != UINT32_MAX) {
+            m_transfer_family = m_graphics_family;
+        }
+
+        if (m_graphics_family == UINT32_MAX) {
+            throw std::runtime_error("Failed to find graphics queue family");
+        }
+
+        UH_INFO_FMT("Queue families - Graphics: {}, Compute: {}, Transfer: {}",
+            m_graphics_family, m_compute_family, m_transfer_family);
+    }
+
     void Vk_Device::create_logical_device(const Device_Desc& desc)
     {
-        // Collect unique queue families
         std::set<uint32_t> unique_queue_families = {
             m_graphics_family,
             m_compute_family,
@@ -218,14 +272,29 @@ namespace mango::graphics::vk
             queue_create_infos.push_back(queue_create_info);
         }
 
+        // Query supported features
+        VkPhysicalDeviceFeatures supported_features{};
+        vkGetPhysicalDeviceFeatures(m_physical_device, &supported_features);
+
         VkPhysicalDeviceFeatures device_features{};
-        device_features.samplerAnisotropy = VK_TRUE;
-        device_features.fillModeNonSolid = VK_TRUE;
-        device_features.wideLines = VK_TRUE;
-        // Add more features as needed
+
+        if (supported_features.samplerAnisotropy) {
+            device_features.samplerAnisotropy = VK_TRUE;
+        }
+
+        if (supported_features.fillModeNonSolid) {
+            device_features.fillModeNonSolid = VK_TRUE;
+        }
+
+        // Enable timeline semaphore feature
+        VkPhysicalDeviceTimelineSemaphoreFeatures timeline_features{};
+        timeline_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES;
+        timeline_features.timelineSemaphore = VK_TRUE;
+        timeline_features.pNext = nullptr;
 
         VkDeviceCreateInfo create_info{};
         create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        create_info.pNext = &timeline_features;  // Chain timeline semaphore features
         create_info.queueCreateInfoCount = static_cast<uint32_t>(queue_create_infos.size());
         create_info.pQueueCreateInfos = queue_create_infos.data();
         create_info.pEnabledFeatures = &device_features;
@@ -234,6 +303,10 @@ namespace mango::graphics::vk
         std::vector<const char*> device_extensions = {
             VK_KHR_SWAPCHAIN_EXTENSION_NAME,
         };
+
+        #ifdef __APPLE__
+        device_extensions.push_back("VK_KHR_portability_subset");
+        #endif
 
         if (m_enable_raytracing) {
             device_extensions.push_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
@@ -256,7 +329,6 @@ namespace mango::graphics::vk
             throw std::runtime_error("Failed to create logical device");
         }
 
-        // get queue handle
         vkGetDeviceQueue(m_device, m_graphics_family, 0, &m_graphics_queue);
         vkGetDeviceQueue(m_device, m_compute_family, 0, &m_compute_queue);
         vkGetDeviceQueue(m_device, m_transfer_family, 0, &m_transfer_queue);
@@ -345,10 +417,13 @@ namespace mango::graphics::vk
         extensions.push_back("VK_KHR_win32_surface");
         #elif __linux__
         extensions.push_back("VK_KHR_surface");
-        extensions.push_back("VK_KHR_xcb_surface"); // or VK_KHR_xlib_surface
+        extensions.push_back("VK_KHR_xcb_surface");
         #elif __APPLE__
         extensions.push_back("VK_KHR_surface");
         extensions.push_back("VK_EXT_metal_surface");
+        // macOS: Add portability enumeration extension
+        extensions.push_back("VK_KHR_portability_enumeration");
+        extensions.push_back("VK_KHR_get_physical_device_properties2");
         #endif
 
         if (m_enable_validation) {
@@ -544,39 +619,40 @@ namespace mango::graphics::vk
         }
     }
 
-    void Vk_Device::create_default_descriptor_pool() {
-    std::vector<Vk_Descriptor_Pool::Pool_Size> pool_sizes = {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000},
-        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000},
-        {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000},
-        {VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
-    };
+    void Vk_Device::create_default_descriptor_pool()
+    {
+        std::vector<Vk_Descriptor_Pool::Pool_Size> pool_sizes = {
+            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000},
+            {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000},
+            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000},
+            {VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
+            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
+        };
 
-    m_descriptor_pool = std::make_unique<Vk_Descriptor_Pool>(
-        m_device, 1000, pool_sizes);
-}
-
-Descriptor_Set_Layout_Handle Vk_Device::create_descriptor_set_layout(
-    const Descriptor_Set_Layout_Desc& desc)
-{
-    return std::make_shared<Vk_Descriptor_Set_Layout>(m_device, desc);
-}
-
-Descriptor_Set_Handle Vk_Device::create_descriptor_set(
-    std::shared_ptr<Descriptor_Set_Layout> layout)
-{
-    auto vk_layout = std::dynamic_pointer_cast<Vk_Descriptor_Set_Layout>(layout);
-    if (!vk_layout) {
-        throw std::runtime_error("Invalid descriptor set layout type");
+        m_descriptor_pool = std::make_unique<Vk_Descriptor_Pool>(
+            m_device, 1000, pool_sizes);
     }
 
-    if (!m_descriptor_pool) {
-        create_default_descriptor_pool();
+    Descriptor_Set_Layout_Handle Vk_Device::create_descriptor_set_layout(
+        const Descriptor_Set_Layout_Desc& desc)
+    {
+        return std::make_shared<Vk_Descriptor_Set_Layout>(m_device, desc);
     }
 
-    return std::make_shared<Vk_Descriptor_Set>(
-        m_device, m_descriptor_pool->get_vk_pool(), vk_layout);
-}
+    Descriptor_Set_Handle Vk_Device::create_descriptor_set(
+        std::shared_ptr<Descriptor_Set_Layout> layout)
+    {
+        auto vk_layout = std::dynamic_pointer_cast<Vk_Descriptor_Set_Layout>(layout);
+        if (!vk_layout) {
+            throw std::runtime_error("Invalid descriptor set layout type");
+        }
+
+        if (!m_descriptor_pool) {
+            create_default_descriptor_pool();
+        }
+
+        return std::make_shared<Vk_Descriptor_Set>(
+            m_device, m_descriptor_pool->get_vk_pool(), vk_layout);
+    }
 }

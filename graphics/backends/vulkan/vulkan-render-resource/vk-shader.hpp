@@ -5,7 +5,7 @@
 
 namespace mango::graphics::vk
 {
-    class Vk_Shader : public Shader
+    struct Vk_Shader : public Shader
     {
     public:
         Vk_Shader(VkDevice device, const Shader_Desc& desc);

@@ -39,9 +39,10 @@ add_subdirectory(3rdparty/shaderc)
 
 add_subdirectory(core)
 add_subdirectory(graphics)
+add_subdirectory(app)
 
 #file(GLOB CORE_SOURCES "core/**/*.cpp")
 
 add_executable(Mangifera Mangifera.cpp core)
 
-target_link_libraries(Mangifera PUBLIC core glm imgui ${Vulkan_LIBRARIES} glfw graphics Vulkan::Vulkan)
+target_link_libraries(Mangifera PUBLIC core glm app imgui ${Vulkan_LIBRARIES} glfw graphics Vulkan::Vulkan)

@@ -4,7 +4,7 @@
 
 namespace mango::graphics::vk
 {
-    class Vk_Sampler : public Sampler
+    struct Vk_Sampler : public Sampler
     {
     public:
         Vk_Sampler(VkDevice device, VkPhysicalDevice physical_device, const Sampler_Desc& desc);

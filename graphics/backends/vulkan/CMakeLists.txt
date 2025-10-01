@@ -10,4 +10,4 @@ target_include_directories(vulkan_backend PUBLIC ${PROJECT_SOURCE_DIR}/graphics)
 target_include_directories(vulkan_backend PUBLIC ${PROJECT_SOURCE_DIR}/core)
 
 
-target_link_libraries(vulkan_backend PRIVATE Vulkan::Vulkan spirv-reflect-static)
+target_link_libraries(vulkan_backend PRIVATE Vulkan::Vulkan spirv-reflect-static glfw)

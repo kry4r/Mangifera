@@ -15,4 +15,5 @@ target_link_libraries(graphics PUBLIC
     shaderc
     vulkan_backend
     spirv-reflect-static
+    glfw
 )

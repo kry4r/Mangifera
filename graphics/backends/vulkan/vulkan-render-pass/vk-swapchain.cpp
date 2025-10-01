@@ -4,6 +4,7 @@
 #include "log/historiographer.hpp"
 #include <stdexcept>
 #include <algorithm>
+#include <GLFW/glfw3.h>
 
 #ifdef _WIN32
 #include <vulkan/vulkan_win32.h>
@@ -16,7 +17,7 @@
 namespace mango::graphics::vk
 {
     Vk_Swapchain::Vk_Swapchain(VkDevice device, VkPhysicalDevice physical_device,
-                               VkInstance instance, const Swapchain_Desc& desc)
+        VkInstance instance, const Swapchain_Desc& desc)
         : m_device(device)
         , m_physical_device(physical_device)
         , m_instance(instance)
@@ -84,40 +85,14 @@ namespace mango::graphics::vk
 
     void Vk_Swapchain::create_surface()
     {
-#ifdef _WIN32
-        VkWin32SurfaceCreateInfoKHR create_info{};
-        create_info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-        create_info.hwnd = static_cast<HWND>(m_desc.native_window);
-        create_info.hinstance = GetModuleHandle(nullptr);
+        // Use GLFW's built-in surface creation (works on all platforms)
+        GLFWwindow* glfw_window = static_cast<GLFWwindow*>(m_desc.native_window);
 
-        if (vkCreateWin32SurfaceKHR(m_instance, &create_info, nullptr, &m_surface) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to create Win32 surface");
+        if (glfwCreateWindowSurface(m_instance, glfw_window, nullptr, &m_surface) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create window surface via GLFW");
         }
-#elif __linux__
-        // If Xcb
-        // VkXcbSurfaceCreateInfoKHR create_info{};
-        // create_info.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
-        // create_info.connection = connection;
-        // create_info.window = static_cast<xcb_window_t>(reinterpret_cast<uintptr_t>(m_desc.native_window));
 
-        // if (vkCreateXcbSurfaceKHR(m_instance, &create_info, nullptr, &m_surface) != VK_SUCCESS) {
-        //     throw std::runtime_error("Failed to create XCB surface");
-        // }
-
-        throw std::runtime_error("Linux surface creation not fully implemented - need XCB/Xlib connection");
-#elif __APPLE__
-        VkMetalSurfaceCreateInfoEXT create_info{};
-        create_info.sType = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT;
-        create_info.pLayer = static_cast<CAMetalLayer*>(m_desc.native_window);
-
-        if (vkCreateMetalSurfaceEXT(m_instance, &create_info, nullptr, &m_surface) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to create Metal surface");
-        }
-#else
-        throw std::runtime_error("Unsupported platform for surface creation");
-#endif
-
-        UH_INFO("Vulkan surface created");
+        UH_INFO("Vulkan surface created via GLFW");
     }
 
     void Vk_Swapchain::create_swapchain()
@@ -203,7 +178,18 @@ namespace mango::graphics::vk
                 throw std::runtime_error("Failed to create swapchain image view");
             }
 
-            m_images[i] = nullptr;
+            // Create a Vk_Texture wrapper for this swapchain image
+            // Note: We need a special constructor for swapchain images
+            // For now, create a shared_ptr that wraps the image without owning it
+            m_images[i] = std::make_shared<Vk_Swapchain_Texture>(
+                m_device,
+                m_physical_device,
+                m_vk_images[i],
+                m_image_views[i],
+                m_image_format,
+                m_extent.width,
+                m_extent.height
+            );
         }
 
         UH_INFO_FMT("Created {} swapchain image views", m_image_views.size());
@@ -250,7 +236,7 @@ namespace mango::graphics::vk
     }
 
     void Vk_Swapchain::present(uint32_t image_index,
-                               const std::vector<std::shared_ptr<Semaphore>>& wait_semaphores)
+        const std::vector<std::shared_ptr<Semaphore>>& wait_semaphores)
     {
         throw std::runtime_error("Use Command_Queue::present() instead of calling Swapchain::present() directly");
     }
@@ -323,11 +309,11 @@ namespace mango::graphics::vk
         VkExtent2D actual_extent = {m_desc.width, m_desc.height};
 
         actual_extent.width = std::clamp(actual_extent.width,
-                                        capabilities.minImageExtent.width,
-                                        capabilities.maxImageExtent.width);
+            capabilities.minImageExtent.width,
+            capabilities.maxImageExtent.width);
         actual_extent.height = std::clamp(actual_extent.height,
-                                         capabilities.minImageExtent.height,
-                                         capabilities.maxImageExtent.height);
+            capabilities.minImageExtent.height,
+            capabilities.maxImageExtent.height);
 
         return actual_extent;
     }

@@ -9,7 +9,7 @@ namespace mango::graphics {
 
 namespace mango::graphics::vk {
 
-class Vk_Texture : public Texture {
+struct Vk_Texture : public Texture {
 public:
     Vk_Texture(VkDevice device, VkPhysicalDevice physical_device,
                const Texture_Desc& desc);
@@ -41,7 +41,7 @@ public:
 
     std::size_t get_data_size(uint32_t mip_level = 0) const;
 
-private:
+protected:
     VkDevice m_device = VK_NULL_HANDLE;
     VkPhysicalDevice m_physical_device = VK_NULL_HANDLE;
     VkImage m_image = VK_NULL_HANDLE;
@@ -52,6 +52,7 @@ private:
 
     Texture_Desc m_desc;
 
+private:
     auto to_vk_format(Texture_Format format) const -> VkFormat;
     auto to_vk_image_type() const -> VkImageType;
     auto to_vk_image_view_type() const -> VkImageViewType;
@@ -59,7 +60,7 @@ private:
     auto get_image_aspect_flags() const -> VkImageAspectFlags;
     auto is_depth_format() const -> bool;
     auto is_stencil_format() const -> bool;
-    auto get_format_size() const -> uint32_t; // 每像素字节数
+    auto get_format_size() const -> uint32_t;
 
     auto find_memory_type(uint32_t type_filter,
                          VkMemoryPropertyFlags properties) const -> uint32_t;
