@@ -4,6 +4,7 @@
 #include "render-resource/sampler.hpp"
 #include "render-resource/shader.hpp"
 #include "render-resource/texture.hpp"
+#include "render-pass/render-pass.hpp"
 
 namespace mango::graphics
 {
@@ -57,6 +58,9 @@ namespace mango::graphics
 
         std::vector<Render_Target_Desc> render_targets;
         uint32_t depth_stencil_format = 0; // optional
+
+        std::shared_ptr<Render_Pass> render_pass;
+        uint32_t subpass = 0;
     };
 
     struct Graphics_Pipeline_State: public Pipeline_State

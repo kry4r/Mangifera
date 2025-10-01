@@ -54,6 +54,10 @@ namespace mango::graphics::vk
         auto get_compute_queue_family() const -> uint32_t { return m_compute_family; }
         auto get_transfer_queue_family() const -> uint32_t { return m_transfer_family; }
 
+        auto get_graphics_queue() const -> VkQueue { return m_graphics_queue; }
+        auto get_compute_queue() const -> VkQueue { return m_compute_queue; }
+        auto get_transfer_queue() const -> VkQueue { return m_transfer_queue; }
+
         Command_Pool_Handle create_command_pool_for_queue_family(uint32_t queue_family_index,
                                                           bool transient = false,
                                                           bool reset_command_buffer = true);
@@ -90,6 +94,10 @@ namespace mango::graphics::vk
         VkPhysicalDeviceProperties m_device_properties{};
         VkPhysicalDeviceFeatures m_device_features{};
         VkPhysicalDeviceMemoryProperties m_memory_properties{};
+
+        VkQueue m_graphics_queue = VK_NULL_HANDLE;
+        VkQueue m_compute_queue = VK_NULL_HANDLE;
+        VkQueue m_transfer_queue = VK_NULL_HANDLE;
 
         // ========== Configuration ==========
         bool m_enable_validation = false;

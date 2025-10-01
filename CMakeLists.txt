@@ -11,6 +11,16 @@ add_subdirectory(3rdparty/glm)
 add_subdirectory(3rdparty/imgui)
 add_subdirectory(3rdparty/glfw)
 
+# Define a variable for third party includes
+set(SPIRV_REFLECT_INCLUDE_DIR "${PROJECT_SOURCE_DIR}/3rdparty/spirv-reflect")
+
+# Configure SPIRV-Reflect
+set(SPIRV_REFLECT_EXECUTABLE ON CACHE BOOL "" FORCE)
+set(SPIRV_REFLECT_STATIC_LIB ON CACHE BOOL "" FORCE)
+set(SPIRV_REFLECT_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+
+add_subdirectory(3rdparty/spirv-reflect)
+
 set(SHADERC_SKIP_TESTS ON CACHE BOOL "Skip building tests" FORCE)
 set(SHADERC_SKIP_EXAMPLES ON CACHE BOOL "Skip building examples" FORCE)
 set(SHADERC_SKIP_INSTALL ON CACHE BOOL "Skip shaderc install" FORCE)
@@ -34,4 +44,4 @@ add_subdirectory(graphics)
 
 add_executable(Mangifera Mangifera.cpp core)
 
-target_link_libraries(Mangifera PRIVATE core glm imgui ${Vulkan_LIBRARIES} glfw graphics Vulkan::Vulkan)
+target_link_libraries(Mangifera PUBLIC core glm imgui ${Vulkan_LIBRARIES} glfw graphics Vulkan::Vulkan)

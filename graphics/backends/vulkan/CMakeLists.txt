@@ -9,4 +9,5 @@ target_include_directories(vulkan_backend PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${V
 target_include_directories(vulkan_backend PUBLIC ${PROJECT_SOURCE_DIR}/graphics)
 target_include_directories(vulkan_backend PUBLIC ${PROJECT_SOURCE_DIR}/core)
 
-target_link_libraries(vulkan_backend PRIVATE Vulkan::Vulkan)
+
+target_link_libraries(vulkan_backend PRIVATE Vulkan::Vulkan spirv-reflect-static)

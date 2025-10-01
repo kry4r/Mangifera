@@ -217,7 +217,7 @@ namespace mango::graphics::vk
         // Color blend state
         VkPipelineColorBlendAttachmentState color_blend_attachment{};
         color_blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                                               VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+            VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
         color_blend_attachment.blendEnable = desc.blend_state.blend_enable ? VK_TRUE : VK_FALSE;
 
         if (desc.blend_state.blend_enable) {
@@ -246,7 +246,6 @@ namespace mango::graphics::vk
         dynamic_state.dynamicStateCount = static_cast<uint32_t>(dynamic_states.size());
         dynamic_state.pDynamicStates = dynamic_states.data();
 
-        // Create graphics pipeline
         VkGraphicsPipelineCreateInfo pipeline_info{};
         pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
         pipeline_info.stageCount = static_cast<uint32_t>(shader_stages.size());
@@ -261,7 +260,7 @@ namespace mango::graphics::vk
         pipeline_info.pDynamicState = &dynamic_state;
         pipeline_info.layout = m_pipeline_layout->get_vk_pipeline_layout();
         pipeline_info.renderPass = render_pass;
-        pipeline_info.subpass = 0;
+        pipeline_info.subpass = desc.subpass;
         pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
 
         if (vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &m_pipeline) != VK_SUCCESS) {

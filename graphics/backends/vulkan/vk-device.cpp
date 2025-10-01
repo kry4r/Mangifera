@@ -11,6 +11,9 @@
 #include "vulkan-command-execution/vk-command-buffer.hpp"
 #include "vulkan-command-execution/vk-command-pool.hpp"
 #include "vulkan-command-execution/vk-command-queue.hpp"
+#include "vulkan-pipeline-state/vk-graphics-pipeline-state.hpp"
+#include "vulkan-pipeline-state/vk-raytracing-pipeline-state.hpp"
+#include "vulkan-pipeline-state/vk-compute-pipeline-state.hpp"
 #include "log/historiographer.hpp"
 #include <set>
 namespace mango::graphics::vk
@@ -253,7 +256,12 @@ namespace mango::graphics::vk
             throw std::runtime_error("Failed to create logical device");
         }
 
-        UH_INFO("Logical device created");
+        // get queue handle
+        vkGetDeviceQueue(m_device, m_graphics_family, 0, &m_graphics_queue);
+        vkGetDeviceQueue(m_device, m_compute_family, 0, &m_compute_queue);
+        vkGetDeviceQueue(m_device, m_transfer_family, 0, &m_transfer_queue);
+
+        UH_INFO("Logical device created and queues retrieved");
     }
 
     bool Vk_Device::is_device_suitable(VkPhysicalDevice device)
@@ -375,15 +383,37 @@ namespace mango::graphics::vk
 
     Command_Pool_Handle Vk_Device::create_command_pool()
     {
-        // TODO: Implement Vk_Command_Pool
         return create_command_pool_for_queue_family(m_graphics_family);
     }
 
     Command_Queue_Handle Vk_Device::create_command_queue(Queue_Type type)
     {
-        // TODO: Implement Vk_Command_Queue
-        UH_ERROR("create_command_queue not implemented yet");
-        throw std::runtime_error("create_command_queue not implemented yet");
+        VkQueue queue = VK_NULL_HANDLE;
+        uint32_t queue_family = 0;
+
+        switch (type) {
+            case Queue_Type::graphics:
+            case Queue_Type::present:
+                queue = m_graphics_queue;
+                queue_family = m_graphics_family;
+                break;
+
+            case Queue_Type::compute:
+                queue = m_compute_queue;
+                queue_family = m_compute_family;
+                break;
+
+            case Queue_Type::transfer:
+                queue = m_transfer_queue;
+                queue_family = m_transfer_family;
+                break;
+
+            default:
+                throw std::runtime_error("Unsupported queue type");
+        }
+
+        return std::make_shared<Vk_Command_Queue>(m_device, queue, queue_family, type);
+
     }
 
     Fence_Handle Vk_Device::create_fence(bool signaled)
@@ -432,23 +462,30 @@ namespace mango::graphics::vk
 
     Swapchain_Handle Vk_Device::create_swapchain(const Swapchain_Desc& desc)
     {
-        // TODO: Implement Vk_Swapchain
-        UH_ERROR("create_swapchain not implemented yet");
-        throw std::runtime_error("create_swapchain not implemented yet");
+        return std::make_shared<Vk_Swapchain>(m_device, m_physical_device, m_instance, desc);
     }
 
     Graphics_Pipeline_Handle Vk_Device::create_graphics_pipeline(const Graphics_Pipeline_Desc& desc)
     {
-        // TODO: Implement Vk_Graphics_Pipeline
-        UH_ERROR("create_graphics_pipeline not implemented yet");
-        throw std::runtime_error("create_graphics_pipeline not implemented yet");
+        if (!desc.render_pass) {
+            throw std::runtime_error("Graphics pipeline requires a render pass");
+        }
+
+        auto vk_render_pass = std::dynamic_pointer_cast<Vk_Render_Pass>(desc.render_pass);
+        if (!vk_render_pass) {
+            throw std::runtime_error("Invalid render pass type for Vulkan graphics pipeline");
+        }
+
+        return std::make_shared<Vk_Graphics_Pipeline_State>(
+            m_device,
+            desc,
+            vk_render_pass->get_vk_render_pass()
+        );
     }
 
     Compute_Pipeline_Handle Vk_Device::create_compute_pipeline(const Compute_Pipeline_Desc& desc)
     {
-        // TODO: Implement Vk_Compute_Pipeline
-        UH_ERROR("create_compute_pipeline not implemented yet");
-        throw std::runtime_error("create_compute_pipeline not implemented yet");
+        return std::make_shared<Vk_Compute_Pipeline_State>(m_device, desc);
     }
 
     Raytracing_Pipeline_Handle Vk_Device::create_raytracing_pipeline(const Raytracing_Pipeline_Desc& desc)
@@ -456,9 +493,8 @@ namespace mango::graphics::vk
         if (!m_enable_raytracing) {
             throw std::runtime_error("Raytracing is not enabled for this device");
         }
-        // TODO: Implement Vk_Raytracing_Pipeline
-        UH_ERROR("create_raytracing_pipeline not implemented yet");
-        throw std::runtime_error("create_raytracing_pipeline not implemented yet");
+
+        return std::make_shared<Vk_Raytracing_Pipeline_State>(m_device, desc);
     }
 
     // ========== Device Queries ==========

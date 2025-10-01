@@ -6,6 +6,13 @@ file(GLOB_RECURSE GRAPHICS_SOURCE
 add_library(graphics STATIC ${GRAPHICS_SOURCE})
 add_subdirectory(backends/vulkan)
 
-target_include_directories(graphics PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-
-target_link_libraries(graphics PRIVATE shaderc vulkan_backend)
+target_include_directories(graphics
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${SPIRV_REFLECT_INCLUDE_DIR}
+)
+target_link_libraries(graphics PUBLIC
+    shaderc
+    vulkan_backend
+    spirv-reflect-static
+)
