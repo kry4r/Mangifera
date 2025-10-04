@@ -1,6 +1,9 @@
 // app/application/application.cpp
 #include "application.hpp"
 #include "log/historiographer.hpp"
+#include "manager/world.hpp"
+#include "resource/transform.hpp"
+#include <imgui.h>
 #include <stdexcept>
 #include <thread>
 
@@ -63,9 +66,9 @@ namespace mango::app
         window_ = std::make_unique<Window>(window_desc);
 
         // Set resize callback
-        window_->set_resize_callback([this](uint32_t w, uint32_t h) {
+        window_->set_resize_callback([this] (uint32_t w, uint32_t h) {
             handle_window_resize(w, h);
-        });
+            });
 
         UH_INFO("Window initialized");
     }
@@ -247,4 +250,91 @@ namespace mango::app
         initialized_ = false;
     }
 
+    auto Application::scene_tree_window() -> void
+    {
+        if (!ImGui::Begin("Scene Tree")) {
+            ImGui::End();
+            return;
+        }
+
+        auto scene_graph = get_renderer()->get_scene_graph();
+        if (scene_graph) {
+            display_scene_node(scene_graph->get_root_node());
+        }
+
+        ImGui::End();
+    }
+
+    auto Application::display_scene_node(const core::Scene_Node& node) -> void
+    {
+        ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
+        bool is_open = ImGui::TreeNodeEx((void*) (uintptr_t) node.id, flags, "%s", node.name.c_str());
+
+        if (ImGui::IsItemClicked(1)) {
+            ImGui::OpenPopup("NodeMenu");
+        }
+
+        if (ImGui::BeginPopup("NodeMenu")) {
+            if (ImGui::MenuItem("Add Child")) {
+                add_child_node(node);
+            }
+            if (ImGui::MenuItem("Attach Twig")) {
+                attach_twig_to_node(node);
+            }
+            ImGui::EndPopup();
+        }
+
+        if (is_open) {
+            auto child = node.children;
+            while (child) {
+                display_scene_node(*child);
+                child = child->next;
+            }
+            ImGui::TreePop();
+        }
+    }
+
+    auto Application::add_child_node(const core::Scene_Node& node) -> void
+    {
+        auto world = core::World::current_instance();
+
+        core::Entity new_entity = world->create_entity();
+
+        auto scene_graph = get_renderer()->get_scene_graph();
+        if (scene_graph) {
+            scene_graph->add_entity_to_scene(new_entity, node);
+        }
+
+        world->attach_twig(new_entity, resource::Transform());
+    }
+
+    auto Application::get_entity_from_scene_node(const core::Scene_Node& node) -> core::Entity
+    {
+        for (auto& pair : renderer_->get_scene_graph()->get_entities_mapping()) {
+            if (pair.second.id == node.id) {
+                return pair.first;
+            }
+        }
+        return core::INVALID_ENTITY;
+    }
+
+    auto Application::attach_twig_to_node(const core::Scene_Node& node) -> void
+    {
+        auto world = core::World::current_instance();
+
+        core::Entity entity = get_entity_from_scene_node(node);
+
+        if (ImGui::BeginPopup("TwigMenu")) {
+            if (ImGui::MenuItem("Transform")) {
+
+            }
+            if (ImGui::MenuItem("Mesh")) {
+
+            }
+            if (ImGui::MenuItem("Light")) {
+
+            }
+            ImGui::EndPopup();
+        }
+    }
 } // namespace mango::app

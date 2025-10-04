@@ -2,6 +2,7 @@
 #pragma once
 #include "window/window.hpp"
 #include "renderer/renderer.hpp"
+#include "manager/scene-graph.hpp"
 #include <memory>
 #include <chrono>
 
@@ -51,6 +52,11 @@ namespace mango::app
         virtual void on_shutdown() {}
         virtual void on_window_resize(uint32_t width, uint32_t height) {}
 
+        auto scene_tree_window() -> void;
+        auto display_scene_node(const core::Scene_Node& node) -> void;
+        auto add_child_node(const core::Scene_Node& node) -> void;
+        auto attach_twig_to_node(const core::Scene_Node& node) -> void;
+        auto get_entity_from_scene_node(const core::Scene_Node& node) -> core::Entity;
     private:
         // Initialization
         void init();

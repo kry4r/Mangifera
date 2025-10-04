@@ -10,6 +10,7 @@
 #include "command-execution/command-queue.hpp"
 #include "sync/fence.hpp"
 #include "sync/semaphore.hpp"
+#include "manager/scene-graph.hpp"
 #include <memory>
 #include <vector>
 #include <functional>
@@ -60,6 +61,7 @@ namespace mango::app
         auto get_width() const -> uint32_t { return width_; }
         auto get_height() const -> uint32_t { return height_; }
         auto get_current_frame_index() const -> uint32_t { return current_frame_; }
+        auto get_scene_graph() -> core::Scene_Graph* { return core::Scene_Graph::current_instance(); }
 
         // Callback for custom rendering
         using RenderCallback = std::function<void(graphics::Command_Buffer_Handle)>;

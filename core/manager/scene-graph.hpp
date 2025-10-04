@@ -39,5 +39,9 @@ namespace mango::core
         auto first_child_of(Scene_Node node) -> std::shared_ptr<Scene_Node>;
 
         auto next_decendent_of(Scene_Node node) ->std::shared_ptr<Scene_Node>;
+
+        auto add_entity_to_scene(Entity entity, Scene_Node parent) -> void;
+
+        auto get_entities_mapping() -> std::vector<std::pair<Entity,Scene_Node>> {return entities_mapping;}
     };
 }

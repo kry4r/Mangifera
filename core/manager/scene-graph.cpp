@@ -93,4 +93,18 @@ namespace mango::core
     {
         return node.next;
     }
+
+    auto Scene_Graph::add_entity_to_scene(Entity entity, Scene_Node parent) -> void
+    {
+        auto new_node = std::make_shared<Scene_Node>();
+        new_node->name = "Entity " + std::to_string(entity.id);
+
+        if (parent.children) {
+            parent.children->next = new_node;
+        } else {
+            parent.children = new_node;
+        }
+
+        entities_mapping.push_back({entity, *new_node});
+    }
 }

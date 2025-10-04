@@ -11,6 +11,8 @@ add_subdirectory(3rdparty/glm)
 add_subdirectory(3rdparty/imgui)
 add_subdirectory(3rdparty/glfw)
 
+set(MANGO_3RDPARTY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty)
+
 # Define a variable for third party includes
 set(SPIRV_REFLECT_INCLUDE_DIR "${PROJECT_SOURCE_DIR}/3rdparty/spirv-reflect")
 
@@ -43,6 +45,6 @@ add_subdirectory(app)
 
 #file(GLOB CORE_SOURCES "core/**/*.cpp")
 
-add_executable(Mangifera Mangifera.cpp core)
+add_executable(Mangifera Mangifera.cpp)
 
-target_link_libraries(Mangifera PUBLIC core glm app imgui ${Vulkan_LIBRARIES} glfw graphics Vulkan::Vulkan)
+target_link_libraries(Mangifera PUBLIC core app graphics)
