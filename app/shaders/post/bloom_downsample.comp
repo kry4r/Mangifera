@@ -1,0 +1,67 @@
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D src_tex;
+layout(set = 0, binding = 1, rgba16f) writeonly uniform image2D dst_tex;
+
+layout(push_constant) uniform PushConstants
+{
+    uvec2 src_res;
+    uvec2 dst_res;
+    float threshold;
+    uint  is_first_pass; // 1 = apply threshold, 0 = just downsample
+} pc;
+
+// 13-tap Karis average downsample (reduces firefly artifacts)
+vec3 downsample_13tap(vec2 uv, vec2 texel_size)
+{
+    // Center + 4 corners + 4 edges + 4 sub-corners
+    vec3 a = texture(src_tex, uv + texel_size * vec2(-1.0, -1.0)).rgb;
+    vec3 b = texture(src_tex, uv + texel_size * vec2( 0.0, -1.0)).rgb;
+    vec3 c = texture(src_tex, uv + texel_size * vec2( 1.0, -1.0)).rgb;
+    vec3 d = texture(src_tex, uv + texel_size * vec2(-1.0,  0.0)).rgb;
+    vec3 e = texture(src_tex, uv).rgb;
+    vec3 f = texture(src_tex, uv + texel_size * vec2( 1.0,  0.0)).rgb;
+    vec3 g = texture(src_tex, uv + texel_size * vec2(-1.0,  1.0)).rgb;
+    vec3 h = texture(src_tex, uv + texel_size * vec2( 0.0,  1.0)).rgb;
+    vec3 i = texture(src_tex, uv + texel_size * vec2( 1.0,  1.0)).rgb;
+
+    vec3 j = texture(src_tex, uv + texel_size * vec2(-0.5, -0.5)).rgb;
+    vec3 k = texture(src_tex, uv + texel_size * vec2( 0.5, -0.5)).rgb;
+    vec3 l = texture(src_tex, uv + texel_size * vec2(-0.5,  0.5)).rgb;
+    vec3 m = texture(src_tex, uv + texel_size * vec2( 0.5,  0.5)).rgb;
+
+    // Weighted combination (total weight = 1.0)
+    vec3 result = e * 0.125;
+    result += (a + c + g + i) * 0.03125;
+    result += (b + d + f + h) * 0.0625;
+    result += (j + k + l + m) * 0.125;
+
+    return result;
+}
+
+void main()
+{
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if (pixel.x >= int(pc.dst_res.x) || pixel.y >= int(pc.dst_res.y))
+        return;
+
+    vec2 uv = (vec2(pixel) + 0.5) / vec2(pc.dst_res);
+    vec2 texel_size = 1.0 / vec2(pc.src_res);
+
+    vec3 color = downsample_13tap(uv, texel_size);
+
+    // First pass: apply brightness threshold
+    if (pc.is_first_pass != 0)
+    {
+        float brightness = max(color.r, max(color.g, color.b));
+        float soft = brightness - pc.threshold + 0.1;
+        soft = clamp(soft, 0.0, 0.2);
+        soft = soft * soft / (0.4 + 0.0001);
+        float contribution = max(soft, brightness - pc.threshold) / max(brightness, 0.0001);
+        color *= max(contribution, 0.0);
+    }
+
+    imageStore(dst_tex, pixel, vec4(color, 1.0));
+}

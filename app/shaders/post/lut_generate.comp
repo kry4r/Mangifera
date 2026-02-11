@@ -1,0 +1,69 @@
+#version 450
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 4) in;
+
+layout(set = 0, binding = 0, rgba16f) writeonly uniform image3D lut_image;
+
+layout(push_constant) uniform PushConstants
+{
+    float temperature;
+    float contrast;
+    float saturation;
+    uint  preset;
+} pc;
+
+void main()
+{
+    uvec3 gid = gl_GlobalInvocationID.xyz;
+    if (gid.x >= 32 || gid.y >= 32 || gid.z >= 32)
+        return;
+
+    // Input color: identity mapping normalized to [0,1]
+    vec3 color = vec3(gid) / 31.0;
+
+    // --- Preset transforms (applied before temperature/contrast/saturation) ---
+    if (pc.preset == 1)
+    {
+        // Cinematic: S-curve, cool shadows, warm highlights, slight desaturation
+        color = color * color * (3.0 - 2.0 * color);
+
+        // Shift shadows blue, highlights warm (orange)
+        float lum = dot(color, vec3(0.2126, 0.7152, 0.0722));
+        float shadow_weight = 1.0 - smoothstep(0.0, 0.5, lum);
+        float highlight_weight = smoothstep(0.5, 1.0, lum);
+
+        color.b += shadow_weight * 0.05;
+        color.r += highlight_weight * 0.04;
+        color.g += highlight_weight * 0.02;
+
+        // Slight desaturation
+        float cine_lum = dot(color, vec3(0.2126, 0.7152, 0.0722));
+        color = mix(vec3(cine_lum), color, 0.9);
+    }
+    else if (pc.preset == 2)
+    {
+        // Natural: subtle S-curve, slight warm shift
+        color = mix(color, color * color * (3.0 - 2.0 * color), 0.3);
+
+        // Slight warm shift
+        color.r += 0.02;
+        color.g += 0.01;
+    }
+    // preset == 0: Neutral, no change
+
+    // --- Temperature shift (Planckian-style approximation) ---
+    color.r += pc.temperature * 0.1;
+    color.b -= pc.temperature * 0.1;
+
+    // --- Contrast ---
+    color = (color - 0.5) * pc.contrast + 0.5;
+
+    // --- Saturation ---
+    float lum = dot(color, vec3(0.2126, 0.7152, 0.0722));
+    color = mix(vec3(lum), color, pc.saturation);
+
+    // --- Clamp to valid range ---
+    color = clamp(color, 0.0, 1.0);
+
+    imageStore(lut_image, ivec3(gid), vec4(color, 1.0));
+}

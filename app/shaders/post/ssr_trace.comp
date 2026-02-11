@@ -1,0 +1,122 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D hdr_color;
+layout(set = 0, binding = 1) uniform sampler2D depth_tex;
+layout(set = 0, binding = 2) uniform sampler2D normal_tex;   // .rgb = normal*0.5+0.5, .a = roughness
+layout(set = 0, binding = 3) uniform sampler2D hiz_depth;    // Hi-Z pyramid (but we use mip 0 for linear march)
+layout(set = 0, binding = 4, rgba16f) writeonly uniform image2D ssr_output;
+
+layout(push_constant) uniform PushConstants
+{
+    mat4 proj;
+    mat4 inv_proj;
+    mat4 view;
+    uvec2 full_res;
+    uvec2 half_res;
+    uint  max_steps;
+    float max_distance;
+    float thickness;
+    float _pad;
+} pc;
+
+vec3 view_pos_from_depth(vec2 uv, float depth)
+{
+    vec4 clip = vec4(uv * 2.0 - 1.0, depth, 1.0);
+    clip.y = -clip.y;  // Vulkan Y-flip
+    vec4 view = pc.inv_proj * clip;
+    return view.xyz / view.w;
+}
+
+vec2 project_to_uv(vec3 view_pos)
+{
+    vec4 clip = pc.proj * vec4(view_pos, 1.0);
+    clip.xy /= clip.w;
+    clip.y = -clip.y;  // Vulkan Y-flip
+    return clip.xy * 0.5 + 0.5;
+}
+
+void main()
+{
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if (pixel.x >= int(pc.half_res.x) || pixel.y >= int(pc.half_res.y))
+        return;
+
+    vec2 uv = (vec2(pixel) + 0.5) / vec2(pc.half_res);
+
+    // Sample depth and normal at full-res UV
+    float depth = texture(depth_tex, uv).r;
+    if (depth >= 0.9999) {
+        imageStore(ssr_output, pixel, vec4(0.0));
+        return;
+    }
+
+    vec4 normal_rough = texture(normal_tex, uv);
+    vec3 N = normalize(normal_rough.rgb * 2.0 - 1.0);
+    float roughness = normal_rough.a;
+
+    // Skip very rough surfaces
+    if (roughness > 0.7) {
+        imageStore(ssr_output, pixel, vec4(0.0));
+        return;
+    }
+
+    // Reconstruct view-space position
+    vec3 view_pos = view_pos_from_depth(uv, depth);
+
+    // View-space normal (transform from world to view)
+    vec3 V = normalize(-view_pos);
+    vec3 view_normal = mat3(pc.view) * N;
+
+    // Reflection direction in view space
+    vec3 reflect_dir = reflect(-V, view_normal);
+
+    // Linear screen-space ray march
+    vec3 ray_pos = view_pos;
+    float step_size = pc.max_distance / float(pc.max_steps);
+
+    vec3 result_color = vec3(0.0);
+    float result_alpha = 0.0;
+
+    for (uint i = 0; i < pc.max_steps; i++)
+    {
+        ray_pos += reflect_dir * step_size;
+
+        // Project to screen
+        vec2 ray_uv = project_to_uv(ray_pos);
+
+        // Check bounds
+        if (ray_uv.x < 0.0 || ray_uv.x > 1.0 || ray_uv.y < 0.0 || ray_uv.y > 1.0)
+            break;
+
+        // Sample depth at ray position
+        float ray_depth = texture(depth_tex, ray_uv).r;
+        vec3 sample_view_pos = view_pos_from_depth(ray_uv, ray_depth);
+
+        // Check for intersection
+        float depth_diff = ray_pos.z - sample_view_pos.z;
+        if (depth_diff > 0.0 && depth_diff < pc.thickness)
+        {
+            // Hit! Sample color
+            result_color = texture(hdr_color, ray_uv).rgb;
+
+            // Fresnel (Schlick approximation with F0=0.04 for dielectrics)
+            float F0 = 0.04;
+            float cos_theta = max(dot(V, view_normal), 0.0);
+            float fresnel = F0 + (1.0 - F0) * pow(1.0 - cos_theta, 5.0);
+
+            // Edge fade (fade out near screen borders)
+            vec2 edge_fade = smoothstep(vec2(0.0), vec2(0.05), ray_uv) *
+                             (1.0 - smoothstep(vec2(0.95), vec2(1.0), ray_uv));
+            float fade = edge_fade.x * edge_fade.y;
+
+            // Roughness fade
+            float roughness_fade = 1.0 - smoothstep(0.3, 0.7, roughness);
+
+            result_alpha = fresnel * fade * roughness_fade;
+            break;
+        }
+    }
+
+    imageStore(ssr_output, pixel, vec4(result_color, result_alpha));
+}

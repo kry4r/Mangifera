@@ -1,0 +1,95 @@
+#version 450
+layout(local_size_x = 64, local_size_z = 1, local_size_y = 1) in;
+
+// Each probe has 9 vec4 coefficients (L0 + L1 + L2 bands, RGB + unused alpha)
+// Total probes = grid_dim.x * grid_dim.y * grid_dim.z
+layout(set = 0, binding = 0) buffer ProbeData
+{
+    vec4 coefficients[];  // N * 9 vec4s
+} probes;
+
+layout(set = 0, binding = 1) uniform samplerCube env_map;
+
+layout(push_constant) uniform PushConstants
+{
+    uvec4 grid_dim;       // xyz = grid dimensions, w = total probes
+    vec4  grid_min;       // xyz = world-space min bounds
+    vec4  grid_max;       // xyz = world-space max bounds
+    uint  num_samples;    // samples per probe
+    float _pad0;
+    float _pad1;
+    float _pad2;
+} pc;
+
+// SH basis functions (L0, L1, L2)
+// Y_0^0
+float sh_00(vec3 d) { return 0.282095; }
+// Y_1^{-1}, Y_1^0, Y_1^1
+float sh_1n1(vec3 d) { return 0.488603 * d.y; }
+float sh_10(vec3 d)  { return 0.488603 * d.z; }
+float sh_11(vec3 d)  { return 0.488603 * d.x; }
+// Y_2^{-2}, Y_2^{-1}, Y_2^0, Y_2^1, Y_2^2
+float sh_2n2(vec3 d) { return 1.092548 * d.x * d.y; }
+float sh_2n1(vec3 d) { return 1.092548 * d.y * d.z; }
+float sh_20(vec3 d)  { return 0.315392 * (3.0 * d.z * d.z - 1.0); }
+float sh_21(vec3 d)  { return 1.092548 * d.x * d.z; }
+float sh_22(vec3 d)  { return 0.546274 * (d.x * d.x - d.y * d.y); }
+
+// Fibonacci sphere sampling
+vec3 fibonacci_hemisphere(uint i, uint n)
+{
+    float theta = acos(1.0 - 2.0 * (float(i) + 0.5) / float(n));
+    float phi = 2.0 * 3.14159265 * float(i) * 0.6180339887; // golden ratio
+    return vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
+}
+
+void main()
+{
+    uint probe_idx = gl_GlobalInvocationID.x;
+    if (probe_idx >= pc.grid_dim.w)
+        return;
+
+    // Compute probe world position from grid index
+    uint gx = probe_idx % pc.grid_dim.x;
+    uint gy = (probe_idx / pc.grid_dim.x) % pc.grid_dim.y;
+    uint gz = probe_idx / (pc.grid_dim.x * pc.grid_dim.y);
+
+    vec3 grid_size = pc.grid_max.xyz - pc.grid_min.xyz;
+    vec3 cell_size = grid_size / vec3(max(pc.grid_dim.xyz - uvec3(1), uvec3(1)));
+    vec3 probe_pos = pc.grid_min.xyz + vec3(gx, gy, gz) * cell_size;
+
+    // SH coefficient accumulators (9 bands, RGB)
+    vec3 sh[9];
+    for (int i = 0; i < 9; i++) sh[i] = vec3(0.0);
+
+    // Sample environment in all directions
+    uint n = pc.num_samples;
+    float weight = 4.0 * 3.14159265 / float(n);
+
+    for (uint i = 0; i < n; i++)
+    {
+        vec3 dir = fibonacci_hemisphere(i, n * 2); // full sphere
+        // Flip to cover both hemispheres
+        if (i >= n) dir.z = -dir.z;
+
+        vec3 radiance = texture(env_map, dir).rgb;
+
+        // Project onto SH basis
+        sh[0] += radiance * sh_00(dir);
+        sh[1] += radiance * sh_1n1(dir);
+        sh[2] += radiance * sh_10(dir);
+        sh[3] += radiance * sh_11(dir);
+        sh[4] += radiance * sh_2n2(dir);
+        sh[5] += radiance * sh_2n1(dir);
+        sh[6] += radiance * sh_20(dir);
+        sh[7] += radiance * sh_21(dir);
+        sh[8] += radiance * sh_22(dir);
+    }
+
+    // Store SH coefficients
+    uint base = probe_idx * 9;
+    for (int i = 0; i < 9; i++)
+    {
+        probes.coefficients[base + i] = vec4(sh[i] * weight, 0.0);
+    }
+}

@@ -1,0 +1,125 @@
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D depth_tex;
+layout(set = 0, binding = 1) uniform sampler2D normal_tex;
+layout(set = 0, binding = 2, r16f) writeonly uniform image2D ao_output;
+
+layout(push_constant) uniform PushConstants
+{
+    mat4 projection;
+    uvec2 full_res;
+    uvec2 half_res;
+    float radius;
+    float strength;
+    uint  num_samples;
+    uint  frame_idx;
+} pc;
+
+// Reconstruct view-space position from depth
+vec3 reconstruct_position(vec2 uv, float depth)
+{
+    float x = uv.x * 2.0 - 1.0;
+    float y = uv.y * 2.0 - 1.0;
+    vec4 clip = vec4(x, y, depth, 1.0);
+    vec4 view = inverse(pc.projection) * clip;
+    return view.xyz / view.w;
+}
+
+// Interleaved gradient noise for per-pixel rotation
+float interleaved_gradient_noise(vec2 pos)
+{
+    vec3 magic = vec3(0.06711056, 0.00583715, 52.9829189);
+    return fract(magic.z * fract(dot(pos, magic.xy)));
+}
+
+// Hammersley sequence point
+vec2 hammersley(uint i, uint n)
+{
+    uint bits = i;
+    bits = (bits << 16u) | (bits >> 16u);
+    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
+    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
+    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
+    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
+    float radical_inverse = float(bits) * 2.3283064365386963e-10;
+    return vec2(float(i) / float(n), radical_inverse);
+}
+
+void main()
+{
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if (pixel.x >= int(pc.half_res.x) || pixel.y >= int(pc.half_res.y))
+        return;
+
+    vec2 uv = (vec2(pixel) + 0.5) / vec2(pc.half_res);
+
+    float depth = texture(depth_tex, uv).r;
+    if (depth >= 1.0)
+    {
+        imageStore(ao_output, pixel, vec4(1.0));
+        return;
+    }
+
+    vec3 position = reconstruct_position(uv, depth);
+    vec3 normal = texture(normal_tex, uv).rgb * 2.0 - 1.0;
+    normal = normalize(normal);
+
+    // Per-pixel rotation angle
+    float noise = interleaved_gradient_noise(vec2(pixel) + vec2(pc.frame_idx * 7, pc.frame_idx * 3));
+    float angle = noise * 6.283185;
+    float cos_a = cos(angle);
+    float sin_a = sin(angle);
+
+    float occlusion = 0.0;
+    uint samples = pc.num_samples;
+
+    for (uint i = 0; i < samples; i++)
+    {
+        vec2 xi = hammersley(i, samples);
+
+        // Hemisphere sample direction
+        float r = sqrt(xi.x);
+        float phi = xi.y * 6.283185;
+        vec3 sample_dir = vec3(r * cos(phi), r * sin(phi), sqrt(1.0 - xi.x));
+
+        // Rotate around normal using per-pixel noise
+        vec3 tangent = normalize(cross(abs(normal.y) < 0.999 ? vec3(0, 1, 0) : vec3(1, 0, 0), normal));
+        vec3 bitangent = cross(normal, tangent);
+
+        // Apply noise rotation in tangent plane
+        vec3 rotated_tangent = tangent * cos_a + bitangent * sin_a;
+        vec3 rotated_bitangent = -tangent * sin_a + bitangent * cos_a;
+
+        vec3 sample_pos = position + (rotated_tangent * sample_dir.x +
+                                       rotated_bitangent * sample_dir.y +
+                                       normal * sample_dir.z) * pc.radius;
+
+        // Project sample to screen
+        vec4 proj = pc.projection * vec4(sample_pos, 1.0);
+        vec2 sample_uv = (proj.xy / proj.w) * 0.5 + 0.5;
+
+        if (sample_uv.x < 0.0 || sample_uv.x > 1.0 || sample_uv.y < 0.0 || sample_uv.y > 1.0)
+            continue;
+
+        float sample_depth = texture(depth_tex, sample_uv).r;
+        vec3 sample_actual = reconstruct_position(sample_uv, sample_depth);
+
+        // Occlusion test
+        vec3 diff = sample_actual - position;
+        float dist = length(diff);
+        float range_check = smoothstep(0.0, 1.0, pc.radius / max(dist, 0.001));
+        float ndotv = max(dot(normal, normalize(diff)), 0.0);
+
+        if (sample_actual.z < sample_pos.z && dist < pc.radius)
+        {
+            occlusion += range_check * ndotv;
+        }
+    }
+
+    occlusion = 1.0 - (occlusion / float(samples)) * pc.strength;
+    occlusion = clamp(occlusion, 0.0, 1.0);
+
+    imageStore(ao_output, pixel, vec4(occlusion));
+}

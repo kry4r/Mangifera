@@ -1,0 +1,48 @@
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D src_tex;  // smaller mip
+layout(set = 0, binding = 1, rgba16f) uniform image2D dst_tex; // larger mip (read + write, additive)
+
+layout(push_constant) uniform PushConstants
+{
+    uvec2 src_res;
+    uvec2 dst_res;
+    float filter_radius;
+} pc;
+
+// 3x3 tent filter upsample
+vec3 upsample_tent(vec2 uv, vec2 texel_size)
+{
+    vec3 result = vec3(0.0);
+
+    // 9-tap tent filter
+    result += texture(src_tex, uv + texel_size * vec2(-1.0, -1.0)).rgb * 1.0;
+    result += texture(src_tex, uv + texel_size * vec2( 0.0, -1.0)).rgb * 2.0;
+    result += texture(src_tex, uv + texel_size * vec2( 1.0, -1.0)).rgb * 1.0;
+    result += texture(src_tex, uv + texel_size * vec2(-1.0,  0.0)).rgb * 2.0;
+    result += texture(src_tex, uv).rgb * 4.0;
+    result += texture(src_tex, uv + texel_size * vec2( 1.0,  0.0)).rgb * 2.0;
+    result += texture(src_tex, uv + texel_size * vec2(-1.0,  1.0)).rgb * 1.0;
+    result += texture(src_tex, uv + texel_size * vec2( 0.0,  1.0)).rgb * 2.0;
+    result += texture(src_tex, uv + texel_size * vec2( 1.0,  1.0)).rgb * 1.0;
+
+    return result / 16.0;
+}
+
+void main()
+{
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if (pixel.x >= int(pc.dst_res.x) || pixel.y >= int(pc.dst_res.y))
+        return;
+
+    vec2 uv = (vec2(pixel) + 0.5) / vec2(pc.dst_res);
+    vec2 texel_size = pc.filter_radius / vec2(pc.src_res);
+
+    vec3 upsampled = upsample_tent(uv, texel_size);
+
+    // Additive blend with existing content in dst
+    vec3 existing = imageLoad(dst_tex, pixel).rgb;
+    imageStore(dst_tex, pixel, vec4(existing + upsampled, 1.0));
+}

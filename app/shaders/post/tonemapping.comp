@@ -1,0 +1,105 @@
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D hdr_input;
+layout(set = 0, binding = 1, rgba16f) writeonly uniform image2D output_image;
+
+layout(push_constant) uniform PushConstants
+{
+    uvec2 resolution;
+    uint  tone_map_mode;    // 0 = ACES, 1 = Reinhard
+    float manual_exposure;
+    uint  auto_exposure_on;
+    uint  gamma_debug_mode; // 0=off, 1=linear, 2=sRGB, 3=albedo range
+    uint  color_grading_enabled;
+    float _pad1;
+} pc;
+
+layout(set = 0, binding = 2) buffer ExposureBuffer
+{
+    float current_exposure;
+    float target_exposure;
+} exposure_buf;
+
+layout(set = 0, binding = 3) uniform sampler3D color_lut;
+
+// ACES filmic tone mapping (same as blit shader)
+vec3 aces_tonemap(vec3 x)
+{
+    const float a = 2.51;
+    const float b = 0.03;
+    const float c = 2.43;
+    const float d = 0.59;
+    const float e = 0.14;
+    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+
+void main()
+{
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if (pixel.x >= int(pc.resolution.x) || pixel.y >= int(pc.resolution.y))
+        return;
+
+    vec2 uv = (vec2(pixel) + 0.5) / vec2(pc.resolution);
+    vec3 color = texture(hdr_input, uv).rgb;
+
+    // Exposure
+    float exposure = pc.manual_exposure;
+    if (pc.auto_exposure_on != 0)
+    {
+        exposure = exposure_buf.current_exposure;
+    }
+    color *= exposure;
+
+    // Gamma debug modes
+    if (pc.gamma_debug_mode == 1)
+    {
+        // Show linear (bypass tone map) - useful to verify linear HDR pipeline
+        imageStore(output_image, pixel, vec4(color, 1.0));
+        return;
+    }
+    else if (pc.gamma_debug_mode == 2)
+    {
+        // Show with sRGB curve applied (manual gamma 2.2)
+        vec3 srgb = pow(clamp(color, 0.0, 1.0), vec3(1.0 / 2.2));
+        imageStore(output_image, pixel, vec4(srgb, 1.0));
+        return;
+    }
+    else if (pc.gamma_debug_mode == 3)
+    {
+        // Albedo range check: red if < 0.02, blue if > 0.9
+        float lum = dot(color, vec3(0.2126, 0.7152, 0.0722));
+        vec3 debug_color = color;
+        if (lum < 0.02)
+            debug_color = vec3(1.0, 0.0, 0.0); // too dark
+        else if (lum > 0.9)
+            debug_color = vec3(0.0, 0.0, 1.0); // too bright
+        imageStore(output_image, pixel, vec4(debug_color, 1.0));
+        return;
+    }
+
+    // Tone mapping
+    if (pc.tone_map_mode == 0)
+    {
+        color = aces_tonemap(color);
+    }
+    else
+    {
+        // Reinhard
+        color = color / (color + vec3(1.0));
+    }
+
+    // Color grading via 3D LUT
+    if (pc.color_grading_enabled != 0)
+    {
+        // Scale and bias UVW to sample center of LUT texels
+        vec3 lut_coord = color * (31.0 / 32.0) + (0.5 / 32.0);
+        color = texture(color_lut, lut_coord).rgb;
+    }
+
+    // Gamma correction
+    color = pow(color, vec3(1.0 / 2.2));
+
+    imageStore(output_image, pixel, vec4(color, 1.0));
+}

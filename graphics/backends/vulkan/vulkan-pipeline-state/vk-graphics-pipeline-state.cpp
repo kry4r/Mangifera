@@ -246,7 +246,7 @@ namespace mango::graphics::vk
         depth_stencil.depthBoundsTestEnable = VK_FALSE;
         depth_stencil.stencilTestEnable = desc.depth_stencil_state.stencil_enable ? VK_TRUE : VK_FALSE;
 
-        // Color blend state
+        // Color blend state — one blend attachment per color attachment in the subpass
         VkPipelineColorBlendAttachmentState color_blend_attachment{};
         color_blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
             VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
@@ -261,11 +261,14 @@ namespace mango::graphics::vk
             color_blend_attachment.alphaBlendOp = VK_BLEND_OP_ADD;
         }
 
+        uint32_t num_color_attachments = desc.color_attachment_count > 0 ? desc.color_attachment_count : 1;
+        std::vector<VkPipelineColorBlendAttachmentState> color_blend_attachments(num_color_attachments, color_blend_attachment);
+
         VkPipelineColorBlendStateCreateInfo color_blending{};
         color_blending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
         color_blending.logicOpEnable = VK_FALSE;
-        color_blending.attachmentCount = 1;
-        color_blending.pAttachments = &color_blend_attachment;
+        color_blending.attachmentCount = num_color_attachments;
+        color_blending.pAttachments = color_blend_attachments.data();
 
         // Dynamic state
         std::vector<VkDynamicState> dynamic_states = {

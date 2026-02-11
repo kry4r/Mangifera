@@ -73,6 +73,8 @@ namespace mango::graphics
         std::vector<Descriptor_Set_Layout_Handle> descriptor_set_layouts;
         std::vector<Push_Constant_Range> push_constants;
 
+        uint32_t color_attachment_count = 1; // Number of color attachments in the subpass
+
         std::shared_ptr<Render_Pass> render_pass;
         uint32_t subpass = 0;
     };

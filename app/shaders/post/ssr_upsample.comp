@@ -1,0 +1,53 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D ssr_half;   // half-res SSR result
+layout(set = 0, binding = 1) uniform sampler2D depth_tex;  // full-res depth
+layout(set = 0, binding = 2, rgba16f) writeonly uniform image2D ssr_output;
+
+layout(push_constant) uniform PushConstants
+{
+    uvec2 full_res;
+    uvec2 half_res;
+} pc;
+
+void main()
+{
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if (pixel.x >= int(pc.full_res.x) || pixel.y >= int(pc.full_res.y))
+        return;
+
+    vec2 uv = (vec2(pixel) + 0.5) / vec2(pc.full_res);
+    float center_depth = texture(depth_tex, uv).r;
+
+    // Bilateral upsample: 4 nearest half-res samples
+    vec2 half_texel = 1.0 / vec2(pc.half_res);
+    vec2 half_uv = uv;
+
+    // 2x2 neighborhood in half-res
+    vec2 offsets[4] = vec2[4](
+        vec2(-0.25, -0.25),
+        vec2( 0.25, -0.25),
+        vec2(-0.25,  0.25),
+        vec2( 0.25,  0.25)
+    );
+
+    vec4 total = vec4(0.0);
+    float total_weight = 0.0;
+
+    for (int i = 0; i < 4; i++)
+    {
+        vec2 sample_uv = half_uv + offsets[i] * half_texel;
+        vec4 ssr_sample = texture(ssr_half, sample_uv);
+        float sample_depth = texture(depth_tex, sample_uv).r;
+
+        float depth_diff = abs(center_depth - sample_depth);
+        float w = exp(-depth_diff * 1000.0);
+
+        total += ssr_sample * w;
+        total_weight += w;
+    }
+
+    vec4 result = (total_weight > 0.001) ? total / total_weight : vec4(0.0);
+    imageStore(ssr_output, pixel, result);
+}

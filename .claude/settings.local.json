@@ -10,7 +10,9 @@
       "Bash(timeout:*)",
       "mcp__filesystem__list_directory",
       "Bash(cd:*)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "mcp__filesystem__read_multiple_files",
+      "mcp__filesystem__directory_tree"
     ]
   }
 }

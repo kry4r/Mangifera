@@ -1,0 +1,41 @@
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D hdr_input;
+layout(set = 0, binding = 1) uniform sampler2D ao_tex;      // SSAO (r16f, 1.0 = no occlusion)
+layout(set = 0, binding = 2) uniform sampler2D ssr_tex;     // SSR (rgba16f, future)
+layout(set = 0, binding = 3, rgba16f) writeonly uniform image2D output_image;
+
+layout(push_constant) uniform PushConstants
+{
+    uvec2 resolution;
+    uint  ssao_enabled;
+    uint  ssr_enabled;
+} pc;
+
+void main()
+{
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if (pixel.x >= int(pc.resolution.x) || pixel.y >= int(pc.resolution.y))
+        return;
+
+    vec2 uv = (vec2(pixel) + 0.5) / vec2(pc.resolution);
+    vec3 color = texture(hdr_input, uv).rgb;
+
+    // Apply SSAO
+    if (pc.ssao_enabled != 0)
+    {
+        float ao = texture(ao_tex, uv).r;
+        color *= ao;
+    }
+
+    // Apply SSR (future Phase 5)
+    if (pc.ssr_enabled != 0)
+    {
+        vec4 ssr = texture(ssr_tex, uv);
+        color += ssr.rgb * ssr.a; // pre-multiplied alpha blend
+    }
+
+    imageStore(output_image, pixel, vec4(color, 1.0));
+}

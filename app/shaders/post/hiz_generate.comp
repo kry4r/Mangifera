@@ -1,0 +1,31 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D src_depth;  // previous mip
+layout(set = 0, binding = 1, r32f) writeonly uniform image2D dst_mip;
+
+layout(push_constant) uniform PushConstants
+{
+    uvec2 src_res;
+    uvec2 dst_res;
+} pc;
+
+void main()
+{
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if (pixel.x >= int(pc.dst_res.x) || pixel.y >= int(pc.dst_res.y))
+        return;
+
+    vec2 uv = (vec2(pixel) + 0.5) / vec2(pc.dst_res);
+    vec2 texel_size = 1.0 / vec2(pc.src_res);
+
+    // Sample 4 texels from source and take max (farthest depth for reverse-Z, but
+    // for standard depth 0=near 1=far, we want max for conservative occlusion)
+    float d0 = texture(src_depth, uv + texel_size * vec2(-0.25, -0.25)).r;
+    float d1 = texture(src_depth, uv + texel_size * vec2( 0.25, -0.25)).r;
+    float d2 = texture(src_depth, uv + texel_size * vec2(-0.25,  0.25)).r;
+    float d3 = texture(src_depth, uv + texel_size * vec2( 0.25,  0.25)).r;
+
+    float max_depth = max(max(d0, d1), max(d2, d3));
+    imageStore(dst_mip, pixel, vec4(max_depth, 0.0, 0.0, 0.0));
+}

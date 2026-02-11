@@ -174,8 +174,89 @@ namespace mango::app
 
         renderer_->set_render_callback([this](graphics::Command_Buffer_Handle cmd) {
             render_scene(cmd);
+        });
+
+        renderer_->set_post_process_callback([this](graphics::Command_Buffer_Handle cmd) {
+            if (post_process_manager_.is_ready()) {
+                post_process_manager_.set_delta_time(delta_time_);
+                post_process_manager_.set_frame_index(static_cast<uint32_t>(frame_count_));
+
+                // Pass projection matrix to post-process (needed for SSAO)
+                auto* world = core::World::current_instance();
+                if (world) {
+                    auto* cam_store = world->get_twig_storage<resource::Camera>();
+                    auto* t_store = world->get_twig_storage<resource::Transform>();
+                    if (cam_store && !cam_store->data.empty() && t_store) {
+                        auto& cam_pair = *cam_store->data.begin();
+                        auto& cam = cam_pair.second;
+                        auto proj = cam.get_projection_matrix();
+                        post_process_manager_.set_projection_matrix(&proj[0][0]);
+                        auto inv_proj = glm::inverse(proj);
+                        post_process_manager_.set_inv_projection_matrix(&inv_proj[0][0]);
+                        auto t_it = t_store->data.find(cam_pair.first);
+                        if (t_it != t_store->data.end()) {
+                            auto view = cam.get_view_matrix(t_it->second);
+                            post_process_manager_.set_view_matrix(&view[0][0]);
+
+                            // Inverse view-projection for volumetric light
+                            auto inv_vp = glm::inverse(proj * view);
+                            post_process_manager_.set_inv_view_proj(&inv_vp[0][0]);
+                        }
+                    }
+
+                    // Find first point/spot light for volumetric
+                    auto* light_store = world->get_twig_storage<resource::Light>();
+                    if (light_store && t_store) {
+                        for (auto& [entity, light] : light_store->data) {
+                            if (light.type == resource::Light_Type::point || light.type == resource::Light_Type::spot) {
+                                auto lt_it = t_store->data.find(entity);
+                                if (lt_it != t_store->data.end()) {
+                                    auto& pos = lt_it->second.position;
+                                    post_process_manager_.set_light_position(pos.x, pos.y, pos.z);
+                                    post_process_manager_.set_light_color(light.color.x, light.color.y, light.color.z, light.intensity);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Pass shadow map and light data for volumetric light
+                if (shadow_state_.ready && shadow_state_.shadow_map) {
+                    post_process_manager_.set_shadow_map(shadow_state_.shadow_map);
+                    post_process_manager_.set_shadow_sampler(shadow_state_.shadow_sampler);
+                    post_process_manager_.set_shadow_view_proj(&shadow_state_.light_view_proj[0][0]);
+                }
+
+                post_process_manager_.execute(cmd,
+                    renderer_->get_hdr_color_texture(),
+                    renderer_->get_depth_texture(),
+                    renderer_->get_gbuffer_normal_texture());
+
+                // Switch blit to read from post-processed output
+                auto output = post_process_manager_.get_output_texture();
+                if (output) {
+                    renderer_->set_blit_source(output);
+                    renderer_->set_blit_passthrough(true);
+                } else {
+                    renderer_->set_blit_source(renderer_->get_hdr_color_texture());
+                }
+            } else {
+                // Fallback: blit reads raw HDR with built-in tone mapping
+                renderer_->set_blit_source(renderer_->get_hdr_color_texture());
+            }
+        });
+
+        renderer_->set_imgui_render_callback([this](graphics::Command_Buffer_Handle cmd) {
             render_imgui(cmd);
         });
+
+        // Initialize post-process manager
+        post_process_manager_.init(
+            renderer_->get_device(),
+            renderer_->get_command_pool(),
+            renderer_->get_graphics_queue(),
+            desc_.width, desc_.height);
 
         UH_INFO("Renderer initialized");
     }
@@ -310,6 +391,9 @@ namespace mango::app
         if (renderer_) {
             renderer_->handle_resize(width, height);
         }
+
+        // Update post-process manager
+        post_process_manager_.resize(width, height);
 
         // Call user callback
         on_window_resize(width, height);
@@ -550,6 +634,9 @@ namespace mango::app
         scene_tree_window();
         resource_window();
         properties_window();
+
+        // Post-processing settings
+        post_process_manager_.render_settings_ui();
 
         // Debug visualization window
         if (ImGui::Begin("Render Debug")) {
@@ -947,8 +1034,9 @@ namespace mango::app
         graphics::Graphics_Pipeline_Desc pipeline_desc{};
         pipeline_desc.vertex_shader = vs;
         pipeline_desc.fragment_shader = fs;
-        pipeline_desc.render_pass = renderer_->get_render_pass();
+        pipeline_desc.render_pass = renderer_->get_scene_render_pass();
         pipeline_desc.subpass = 0;
+        pipeline_desc.color_attachment_count = 2; // HDR color + G-buffer normal
         pipeline_desc.rasterizer_state.cull_enable = false;
         pipeline_desc.rasterizer_state.front_ccw = true;
         pipeline_desc.depth_stencil_state.depth_test_enable = true;
@@ -1036,8 +1124,9 @@ namespace mango::app
                     graphics::Graphics_Pipeline_Desc skybox_desc{};
                     skybox_desc.vertex_shader = skybox_vs;
                     skybox_desc.fragment_shader = skybox_fs;
-                    skybox_desc.render_pass = renderer_->get_render_pass();
+                    skybox_desc.render_pass = renderer_->get_scene_render_pass();
                     skybox_desc.subpass = 0;
+                    skybox_desc.color_attachment_count = 2; // HDR color + G-buffer normal
                     skybox_desc.rasterizer_state.cull_enable = false;
                     skybox_desc.depth_stencil_state.depth_test_enable = false;
                     skybox_desc.depth_stencil_state.depth_write_enable = false;

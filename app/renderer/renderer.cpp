@@ -2,12 +2,21 @@
 #include "renderer.hpp"
 #include "backends/vulkan/vk-device.hpp"
 #include "backends/vulkan/vulkan-render-resource/vk-texture.hpp"
+#include "backends/vulkan/vulkan-render-resource/vk-buffer.hpp"
+#include "utils/shader-compiler.hpp"
 #include "log/historiographer.hpp"
 #include <stdexcept>
 #include <algorithm>
+#include <filesystem>
 
 namespace mango::app
 {
+    static auto blit_shader_path(const char* filename) -> std::string
+    {
+        auto base = std::filesystem::path(__FILE__).parent_path().parent_path();
+        return (base / "shaders" / "post" / filename).string();
+    }
+
     Renderer::Renderer(const Renderer_Desc& desc)
         : desc_(desc)
         , width_(desc.width)
@@ -24,8 +33,12 @@ namespace mango::app
             create_device();
             create_swapchain();
             create_depth_resources();
-            create_render_pass();
-            create_framebuffers();
+            create_offscreen_resources();
+            create_scene_render_pass();
+            create_scene_framebuffer();
+            create_blit_render_pass();
+            create_blit_framebuffers();
+            create_blit_pipeline();
             create_command_resources();
             create_sync_objects();
 
@@ -100,17 +113,14 @@ namespace mango::app
 
     auto Renderer::choose_depth_format() -> graphics::Texture_Format
     {
-        // List of candidate formats in preference order
         std::vector<graphics::Texture_Format> candidates;
 
         #ifdef __APPLE__
-        // MoltenVK supported depth formats (in preference order)
         candidates = {
             graphics::Texture_Format::depth32f_stencil8,
             graphics::Texture_Format::depth32f
         };
         #else
-        // Standard Vulkan depth formats
         candidates = {
             graphics::Texture_Format::depth24_stencil8,
             graphics::Texture_Format::depth32f_stencil8,
@@ -119,8 +129,6 @@ namespace mango::app
         };
         #endif
 
-        // For now, return the first candidate
-        // TODO: Query device support with vkGetPhysicalDeviceFormatProperties
         UH_INFO_FMT("Selected depth format: {}", static_cast<int>(candidates[0]));
         return candidates[0];
     }
@@ -137,7 +145,7 @@ namespace mango::app
         depth_desc.depth = 1;
         depth_desc.mip_levels = 1;
         depth_desc.arrayLayers = 1;
-        depth_desc.sampled = false;
+        depth_desc.sampled = true;   // Enable sampling for SSAO/SSR post-processing
         depth_desc.render_target = true;
 
         depth_image_ = device_->create_texture(depth_desc);
@@ -146,75 +154,249 @@ namespace mango::app
             throw std::runtime_error("Failed to create depth image");
         }
 
-        UH_INFO("Depth resources created");
+        UH_INFO("Depth resources created (sampled=true for post-processing)");
     }
 
-    void Renderer::create_render_pass()
+    void Renderer::create_offscreen_resources()
     {
-        UH_INFO("Creating render pass...");
+        UH_INFO("Creating offscreen HDR resources...");
+
+        // HDR color buffer (rgba16f)
+        graphics::Texture_Desc hdr_desc{};
+        hdr_desc.dimension = graphics::Texture_Kind::tex_2d;
+        hdr_desc.format = graphics::Texture_Format::rgba16f;
+        hdr_desc.width = width_;
+        hdr_desc.height = height_;
+        hdr_desc.depth = 1;
+        hdr_desc.mip_levels = 1;
+        hdr_desc.arrayLayers = 1;
+        hdr_desc.sampled = true;
+        hdr_desc.render_target = true;
+        hdr_desc.storage = true; // For compute shader read/write in post-processing
+
+        hdr_color_ = device_->create_texture(hdr_desc);
+        if (!hdr_color_) {
+            throw std::runtime_error("Failed to create HDR color buffer");
+        }
+
+        // G-buffer normal (rgba16f): normal.xyz + roughness
+        graphics::Texture_Desc normal_desc = hdr_desc;
+        gbuffer_normal_ = device_->create_texture(normal_desc);
+        if (!gbuffer_normal_) {
+            throw std::runtime_error("Failed to create G-buffer normal texture");
+        }
+
+        UH_INFO_FMT("Offscreen HDR resources created ({}x{}, rgba16f)", width_, height_);
+    }
+
+    void Renderer::create_scene_render_pass()
+    {
+        UH_INFO("Creating scene render pass...");
 
         graphics::Render_Pass_Desc rp_desc{};
 
-        // Attachment 0: Color (swapchain image)
+        // Attachment 0: HDR color (rgba16f)
+        graphics::Attachment_Desc hdr_attachment{};
+        hdr_attachment.texture = hdr_color_;
+        hdr_attachment.load_op = 1;  // Clear
+        hdr_attachment.store_op = 0; // Store
+        hdr_attachment.initial_state = 0; // Undefined
+        hdr_attachment.final_state = 4;   // Shader resource (ready for blit sampling)
+        rp_desc.attachments.push_back(hdr_attachment);
+
+        // Attachment 1: Depth
+        graphics::Attachment_Desc depth_attachment{};
+        depth_attachment.texture = depth_image_;
+        depth_attachment.load_op = 1;  // Clear
+        depth_attachment.store_op = 0; // Store (needed for post-processing)
+        depth_attachment.initial_state = 0; // Undefined
+        depth_attachment.final_state = 4;   // Shader resource (for SSAO/SSR)
+        rp_desc.attachments.push_back(depth_attachment);
+
+        // Attachment 2: G-buffer normal (rgba16f)
+        graphics::Attachment_Desc normal_attachment{};
+        normal_attachment.texture = gbuffer_normal_;
+        normal_attachment.load_op = 1;  // Clear
+        normal_attachment.store_op = 0; // Store
+        normal_attachment.initial_state = 0; // Undefined
+        normal_attachment.final_state = 4;   // Shader resource
+        rp_desc.attachments.push_back(normal_attachment);
+
+        // Subpass 0: color=[0, 2], depth=1
+        graphics::Subpass_Desc subpass{};
+        subpass.color_attachments.push_back(0); // hdr_color at location 0
+        subpass.color_attachments.push_back(2); // gbuffer_normal at location 1
+        subpass.depth_stencil_attachment = 1;
+        rp_desc.subpasses.push_back(subpass);
+
+        scene_render_pass_ = device_->create_render_pass(rp_desc);
+        if (!scene_render_pass_) {
+            throw std::runtime_error("Failed to create scene render pass");
+        }
+
+        UH_INFO("Scene render pass created (HDR color + depth + G-buffer normal)");
+    }
+
+    void Renderer::create_scene_framebuffer()
+    {
+        UH_INFO("Creating scene framebuffer...");
+
+        graphics::Framebuffer_Desc fb_desc{};
+        fb_desc.render_pass = scene_render_pass_;
+        fb_desc.attachments.push_back(hdr_color_);
+        fb_desc.attachments.push_back(depth_image_);
+        fb_desc.attachments.push_back(gbuffer_normal_);
+        fb_desc.width = width_;
+        fb_desc.height = height_;
+        fb_desc.layers = 1;
+
+        scene_framebuffer_ = device_->create_framebuffer(fb_desc);
+        if (!scene_framebuffer_) {
+            throw std::runtime_error("Failed to create scene framebuffer");
+        }
+
+        UH_INFO("Scene framebuffer created");
+    }
+
+    void Renderer::create_blit_render_pass()
+    {
+        UH_INFO("Creating blit render pass...");
+
+        graphics::Render_Pass_Desc rp_desc{};
+
+        // Attachment 0: Swapchain color (sRGB)
         graphics::Attachment_Desc color_attachment{};
         color_attachment.texture = swapchain_->get_images()[0];
         color_attachment.load_op = 1;  // Clear
         color_attachment.store_op = 0; // Store
         color_attachment.initial_state = 0; // Undefined
         color_attachment.final_state = 8;  // Present
-
         rp_desc.attachments.push_back(color_attachment);
 
-        // Attachment 1: Depth
-        graphics::Attachment_Desc depth_attachment{};
-        depth_attachment.texture = depth_image_;
-        depth_attachment.load_op = 1;  // Clear
-        depth_attachment.store_op = 1; // Don't care (we don't need to preserve depth)
-        depth_attachment.initial_state = 0; // Undefined
-        depth_attachment.final_state = 3;  // Depth stencil attachment
-
-        rp_desc.attachments.push_back(depth_attachment);
-
-        // Subpass 0
+        // Subpass 0: color only, no depth
         graphics::Subpass_Desc subpass{};
         subpass.color_attachments.push_back(0);
-        subpass.depth_stencil_attachment = 1;
-
         rp_desc.subpasses.push_back(subpass);
 
-        render_pass_ = device_->create_render_pass(rp_desc);
-
-        if (!render_pass_) {
-            throw std::runtime_error("Failed to create render pass");
+        blit_render_pass_ = device_->create_render_pass(rp_desc);
+        if (!blit_render_pass_) {
+            throw std::runtime_error("Failed to create blit render pass");
         }
 
-        UH_INFO("Render pass created");
+        UH_INFO("Blit render pass created");
     }
 
-    void Renderer::create_framebuffers()
+    void Renderer::create_blit_framebuffers()
     {
-        UH_INFO("Creating framebuffers...");
+        UH_INFO("Creating blit framebuffers...");
 
         const auto& swapchain_images = swapchain_->get_images();
-        framebuffers_.resize(swapchain_images.size());
+        blit_framebuffers_.resize(swapchain_images.size());
 
         for (size_t i = 0; i < swapchain_images.size(); i++) {
             graphics::Framebuffer_Desc fb_desc{};
-            fb_desc.render_pass = render_pass_;
+            fb_desc.render_pass = blit_render_pass_;
             fb_desc.attachments.push_back(swapchain_images[i]);
-            fb_desc.attachments.push_back(depth_image_);
             fb_desc.width = width_;
             fb_desc.height = height_;
             fb_desc.layers = 1;
 
-            framebuffers_[i] = device_->create_framebuffer(fb_desc);
+            blit_framebuffers_[i] = device_->create_framebuffer(fb_desc);
 
-            if (!framebuffers_[i]) {
-                throw std::runtime_error("Failed to create framebuffer");
+            if (!blit_framebuffers_[i]) {
+                throw std::runtime_error("Failed to create blit framebuffer");
             }
         }
 
-        UH_INFO_FMT("Created {} framebuffers", framebuffers_.size());
+        UH_INFO_FMT("Created {} blit framebuffers", blit_framebuffers_.size());
+    }
+
+    void Renderer::create_blit_pipeline()
+    {
+        UH_INFO("Creating blit pipeline...");
+
+        // Compile blit shaders
+        auto vs_spv = graphics::utils::compile_shader_form_file(
+            blit_shader_path("fullscreen_blit.vert"), shaderc_vertex_shader);
+        auto fs_spv = graphics::utils::compile_shader_form_file(
+            blit_shader_path("fullscreen_blit.frag"), shaderc_fragment_shader);
+
+        if (vs_spv.empty() || fs_spv.empty()) {
+            UH_ERROR("Failed to compile blit shaders");
+            return;
+        }
+
+        graphics::Shader_Desc vs_desc{};
+        vs_desc.type = graphics::Shader_Type::vertex;
+        vs_desc.bytecode = std::move(vs_spv);
+
+        graphics::Shader_Desc fs_desc{};
+        fs_desc.type = graphics::Shader_Type::fragment;
+        fs_desc.bytecode = std::move(fs_spv);
+
+        auto vs = device_->create_shader(vs_desc);
+        auto fs = device_->create_shader(fs_desc);
+        if (!vs || !fs) {
+            UH_ERROR("Failed to create blit shader objects");
+            return;
+        }
+
+        // Descriptor set layout: binding 0 = combined_image_sampler (HDR texture)
+        graphics::Descriptor_Set_Layout_Desc set_layout_desc{};
+        graphics::Descriptor_Binding hdr_binding{};
+        hdr_binding.binding = 0;
+        hdr_binding.type = graphics::Descriptor_Type::combined_image_sampler;
+        hdr_binding.count = 1;
+        hdr_binding.shader_stages = VK_SHADER_STAGE_FRAGMENT_BIT;
+        set_layout_desc.bindings.push_back(hdr_binding);
+
+        blit_set_layout_ = device_->create_descriptor_set_layout(set_layout_desc);
+        blit_set_ = device_->create_descriptor_set(blit_set_layout_);
+
+        // Create sampler for HDR texture
+        graphics::Sampler_Desc sampler_desc{};
+        sampler_desc.minFilter = graphics::Filter_Mode::linear;
+        sampler_desc.magFilter = graphics::Filter_Mode::linear;
+        sampler_desc.addressU = graphics::Edge_Mode::clamp;
+        sampler_desc.addressV = graphics::Edge_Mode::clamp;
+        blit_sampler_ = device_->create_sampler(sampler_desc);
+
+        // Update descriptor set with HDR color texture
+        if (blit_set_ && hdr_color_ && blit_sampler_) {
+            graphics::Descriptor_Write hdr_write{};
+            hdr_write.binding = 0;
+            hdr_write.type = graphics::Descriptor_Type::combined_image_sampler;
+            hdr_write.textures = { hdr_color_ };
+            hdr_write.samplers = { blit_sampler_ };
+            blit_set_->update({ hdr_write });
+        }
+
+        // Create pipeline
+        graphics::Graphics_Pipeline_Desc pipe_desc{};
+        pipe_desc.vertex_shader = vs;
+        pipe_desc.fragment_shader = fs;
+        pipe_desc.render_pass = blit_render_pass_;
+        pipe_desc.subpass = 0;
+        pipe_desc.rasterizer_state.cull_enable = false;
+        pipe_desc.depth_stencil_state.depth_test_enable = false;
+        pipe_desc.depth_stencil_state.depth_write_enable = false;
+        pipe_desc.blend_state.blend_enable = false;
+        pipe_desc.descriptor_set_layouts = { blit_set_layout_ };
+        // No vertex attributes (fullscreen triangle generated in shader)
+
+        graphics::Push_Constant_Range pc_range{};
+        pc_range.offset = 0;
+        pc_range.size = sizeof(Blit_Push_Constants);
+        pc_range.shader_stages = VK_SHADER_STAGE_FRAGMENT_BIT;
+        pipe_desc.push_constants.push_back(pc_range);
+
+        blit_pipeline_ = device_->create_graphics_pipeline(pipe_desc);
+
+        if (blit_pipeline_) {
+            UH_INFO("Blit pipeline created successfully");
+        } else {
+            UH_ERROR("Failed to create blit pipeline");
+        }
     }
 
     void Renderer::create_command_resources()
@@ -259,14 +441,12 @@ namespace mango::app
         fence_values_.resize(desc_.max_frames_in_flight, 0);
 
         for (uint32_t i = 0; i < desc_.max_frames_in_flight; i++) {
-            // Create fence starting at value 0 (unsignaled)
             in_flight_fences_[i] = device_->create_fence(false);
 
             if (!in_flight_fences_[i]) {
                 throw std::runtime_error("Failed to create fence");
             }
 
-            // Create binary semaphores
             image_available_semaphores_[i] = device_->create_semaphore(false, 0);
             render_finished_semaphores_[i] = device_->create_semaphore(false, 0);
 
@@ -295,7 +475,7 @@ namespace mango::app
         auto& fence = in_flight_fences_[current_frame_];
         uint64_t wait_value = fence_values_[current_frame_];
 
-        if (wait_value > 0) {  // Only wait if we've submitted before
+        if (wait_value > 0) {
             fence->wait(wait_value, UINT64_MAX);
         }
 
@@ -315,9 +495,6 @@ namespace mango::app
         cmd->reset();
         cmd->begin();
 
-        // Note: render pass is NOT started here — it starts in render_frame()
-        // after pre_render_callback_ (e.g. shadow pass) has executed
-
         frame_started_ = true;
     }
 
@@ -329,8 +506,6 @@ namespace mango::app
         }
 
         auto& cmd = command_buffers_[current_frame_];
-
-        cmd->end_render_pass();
         cmd->end();
 
         graphics::Submit_Info submit_info{};
@@ -360,21 +535,20 @@ namespace mango::app
         begin_frame();
 
         if (!frame_started_) {
-            // Frame was skipped (e.g., swapchain recreation)
             return;
         }
 
         auto& cmd = command_buffers_[current_frame_];
 
-        // Pre-render callback (shadow pass, runs OUTSIDE main render pass)
+        // === Phase 1: Pre-render (shadow pass) ===
         if (pre_render_callback_) {
             pre_render_callback_(cmd);
         }
 
-        // Begin main render pass
+        // === Phase 2: Scene render pass (to offscreen HDR + G-buffer) ===
         cmd->begin_render_pass(
-            render_pass_,
-            framebuffers_[current_image_index_],
+            scene_render_pass_,
+            scene_framebuffer_,
             width_,
             height_
         );
@@ -384,10 +558,51 @@ namespace mango::app
             static_cast<float>(height_));
         cmd->set_scissor(0, 0, width_, height_);
 
-        // Execute custom rendering if callback is set
         if (render_callback_) {
             render_callback_(cmd);
         }
+
+        cmd->end_render_pass();
+
+        // === Phase 3: Post-processing (compute dispatches) ===
+        // Reset passthrough — post_process_callback will set it if compute post-processing runs
+        blit_passthrough_ = false;
+        if (post_process_callback_) {
+            post_process_callback_(cmd);
+        }
+
+        // === Phase 4: Final blit to swapchain + ImGui ===
+        cmd->begin_render_pass(
+            blit_render_pass_,
+            blit_framebuffers_[current_image_index_],
+            width_,
+            height_
+        );
+
+        cmd->set_viewport(0.0f, 0.0f,
+            static_cast<float>(width_),
+            static_cast<float>(height_));
+        cmd->set_scissor(0, 0, width_, height_);
+
+        // Draw fullscreen blit (HDR -> swapchain with tone mapping + gamma)
+        if (blit_pipeline_ && blit_set_) {
+            cmd->bind_pipeline(blit_pipeline_);
+            cmd->bind_descriptor_set(0, blit_set_);
+
+            Blit_Push_Constants pc = blit_pc_;
+            if (blit_passthrough_) {
+                pc.tone_map_mode = 2; // passthrough: compute post-process already applied
+            }
+            cmd->push_constants(0, sizeof(Blit_Push_Constants), &pc);
+            cmd->draw(3, 1, 0, 0); // Fullscreen triangle
+        }
+
+        // ImGui overlay
+        if (imgui_render_callback_) {
+            imgui_render_callback_(cmd);
+        }
+
+        cmd->end_render_pass();
 
         end_frame();
     }
@@ -419,6 +634,28 @@ namespace mango::app
         pre_render_callback_ = std::move(callback);
     }
 
+    void Renderer::set_post_process_callback(RenderCallback callback)
+    {
+        post_process_callback_ = std::move(callback);
+    }
+
+    void Renderer::set_imgui_render_callback(RenderCallback callback)
+    {
+        imgui_render_callback_ = std::move(callback);
+    }
+
+    void Renderer::set_blit_source(graphics::Texture_Handle source)
+    {
+        if (!blit_set_ || !source || !blit_sampler_) return;
+
+        graphics::Descriptor_Write hdr_write{};
+        hdr_write.binding = 0;
+        hdr_write.type = graphics::Descriptor_Type::combined_image_sampler;
+        hdr_write.textures = { source };
+        hdr_write.samplers = { blit_sampler_ };
+        blit_set_->update({ hdr_write });
+    }
+
     void Renderer::wait_idle()
     {
         if (device_) {
@@ -434,7 +671,6 @@ namespace mango::app
         }
 
         if (width == width_ && height == height_) {
-            // No change
             return;
         }
 
@@ -448,10 +684,7 @@ namespace mango::app
 
     void Renderer::wait_for_window_size()
     {
-        // Wait until window has valid size (not minimized)
         while (width_ == 0 || height_ == 0) {
-            // This should be handled by the window system
-            // For now, just log and break
             UH_WARN("Window has zero size, waiting...");
             break;
         }
@@ -469,9 +702,14 @@ namespace mango::app
         try {
             create_swapchain();
             create_depth_resources();
-            create_framebuffers();
+            create_offscreen_resources();
+            create_scene_render_pass();
+            create_scene_framebuffer();
+            create_blit_render_pass();
+            create_blit_framebuffers();
+            create_blit_pipeline();
 
-            UH_INFO("Swapchain recreated successfully");
+            UH_INFO("Swapchain and offscreen resources recreated successfully");
         }
         catch (const std::exception& e) {
             UH_ERROR_FMT("Failed to recreate swapchain: {}", e.what());
@@ -481,11 +719,23 @@ namespace mango::app
 
     void Renderer::cleanup_swapchain()
     {
-        framebuffers_.clear();
+        // Clean up in reverse order
+        blit_pipeline_.reset();
+        blit_set_.reset();
+        blit_set_layout_.reset();
+        blit_sampler_.reset();
+        blit_framebuffers_.clear();
+        blit_render_pass_.reset();
+
+        scene_framebuffer_.reset();
+        scene_render_pass_.reset();
+
+        gbuffer_normal_.reset();
+        hdr_color_.reset();
         depth_image_.reset();
         swapchain_.reset();
 
-        UH_INFO("Swapchain resources cleaned up");
+        UH_INFO("Swapchain and offscreen resources cleaned up");
     }
 
     void Renderer::cleanup()
@@ -503,8 +753,18 @@ namespace mango::app
         command_pool_.reset();
         graphics_queue_.reset();
 
-        framebuffers_.clear();
-        render_pass_.reset();
+        blit_pipeline_.reset();
+        blit_set_.reset();
+        blit_set_layout_.reset();
+        blit_sampler_.reset();
+        blit_framebuffers_.clear();
+        blit_render_pass_.reset();
+
+        scene_framebuffer_.reset();
+        scene_render_pass_.reset();
+
+        gbuffer_normal_.reset();
+        hdr_color_.reset();
         depth_image_.reset();
         swapchain_.reset();
 

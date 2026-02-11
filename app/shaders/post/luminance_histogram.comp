@@ -1,0 +1,61 @@
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D hdr_input;
+
+layout(set = 0, binding = 1) buffer HistogramBuffer
+{
+    uint bins[256];
+} histogram;
+
+layout(push_constant) uniform PushConstants
+{
+    uvec2 resolution;
+    float min_log_lum; // e.g. -10.0
+    float inv_log_lum_range; // 1.0 / (max_log_lum - min_log_lum)
+} pc;
+
+shared uint shared_histogram[256];
+
+void main()
+{
+    // Initialize shared histogram
+    uint local_idx = gl_LocalInvocationIndex;
+    if (local_idx < 256)
+    {
+        shared_histogram[local_idx] = 0;
+    }
+    barrier();
+
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if (pixel.x < int(pc.resolution.x) && pixel.y < int(pc.resolution.y))
+    {
+        vec2 uv = (vec2(pixel) + 0.5) / vec2(pc.resolution);
+        vec3 color = texture(hdr_input, uv).rgb;
+
+        float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
+
+        // Map luminance to histogram bin
+        uint bin_idx;
+        if (luminance < 1e-5)
+        {
+            bin_idx = 0; // black pixels in bin 0
+        }
+        else
+        {
+            float log_lum = clamp((log2(luminance) - pc.min_log_lum) * pc.inv_log_lum_range, 0.0, 1.0);
+            bin_idx = uint(log_lum * 254.0 + 1.0); // bins 1-255
+        }
+
+        atomicAdd(shared_histogram[bin_idx], 1);
+    }
+
+    barrier();
+
+    // Write shared histogram to global
+    if (local_idx < 256)
+    {
+        atomicAdd(histogram.bins[local_idx], shared_histogram[local_idx]);
+    }
+}

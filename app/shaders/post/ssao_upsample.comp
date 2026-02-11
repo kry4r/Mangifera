@@ -1,0 +1,57 @@
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D ao_half;
+layout(set = 0, binding = 1) uniform sampler2D depth_tex;
+layout(set = 0, binding = 2, r16f) writeonly uniform image2D ao_full;
+
+layout(push_constant) uniform PushConstants
+{
+    uvec2 full_res;
+    uvec2 half_res;
+} pc;
+
+void main()
+{
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if (pixel.x >= int(pc.full_res.x) || pixel.y >= int(pc.full_res.y))
+        return;
+
+    vec2 uv = (vec2(pixel) + 0.5) / vec2(pc.full_res);
+
+    // Full-res depth at this pixel
+    float center_depth = texture(depth_tex, uv).r;
+
+    // Bilateral upsampling: sample 4 nearest half-res taps
+    vec2 half_texel = 1.0 / vec2(pc.half_res);
+    vec2 half_uv = uv; // half-res and full-res share same UV space
+
+    // 4 bilinear taps with depth-based weights
+    vec2 offsets[4] = vec2[4](
+        vec2(-0.5, -0.5),
+        vec2( 0.5, -0.5),
+        vec2(-0.5,  0.5),
+        vec2( 0.5,  0.5)
+    );
+
+    float total_weight = 0.0;
+    float total_ao = 0.0;
+
+    for (int i = 0; i < 4; i++)
+    {
+        vec2 sample_uv = half_uv + offsets[i] * half_texel;
+        float ao_val = texture(ao_half, sample_uv).r;
+
+        // Depth similarity weight
+        float sample_depth = texture(depth_tex, sample_uv).r;
+        float depth_diff = abs(center_depth - sample_depth);
+        float weight = exp(-depth_diff * 1000.0); // sharp falloff at depth edges
+
+        total_ao += ao_val * weight;
+        total_weight += weight;
+    }
+
+    float result = (total_weight > 0.001) ? total_ao / total_weight : 1.0;
+    imageStore(ao_full, pixel, vec4(result));
+}

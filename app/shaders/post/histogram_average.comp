@@ -1,0 +1,103 @@
+#version 450
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) buffer HistogramBuffer
+{
+    uint bins[256];
+} histogram;
+
+layout(set = 0, binding = 1) buffer ExposureBuffer
+{
+    float current_exposure;
+    float target_exposure;
+} exposure_buf;
+
+layout(push_constant) uniform PushConstants
+{
+    uint  pixel_count;
+    float min_log_lum;
+    float log_lum_range;
+    float time_delta;      // for temporal smoothing
+    float adaptation_speed; // how fast to adapt (e.g. 1.5)
+} pc;
+
+shared uint shared_histogram[256];
+
+void main()
+{
+    uint idx = gl_LocalInvocationIndex;
+    shared_histogram[idx] = histogram.bins[idx];
+
+    // Clear histogram for next frame
+    histogram.bins[idx] = 0;
+
+    barrier();
+
+    // Parallel reduction: compute weighted sum
+    // Each thread contributes its bin's weighted log-luminance
+    // We'll do a simple single-workgroup reduction
+
+    // First compute weighted sum and total count (exclude bin 0 = black pixels)
+    float bin_value = 0.0;
+    uint bin_count = 0;
+    if (idx > 0) // skip bin 0 (black pixels)
+    {
+        bin_count = shared_histogram[idx];
+        float log_lum = (float(idx) - 1.0) / 254.0 * pc.log_lum_range + pc.min_log_lum;
+        bin_value = log_lum * float(bin_count);
+    }
+
+    // Store for reduction
+    shared_histogram[idx] = bin_count;
+    barrier();
+
+    // Use subgroup/shared memory reduction for sum
+    // Simple sequential approach for correctness (single workgroup)
+    if (idx == 0)
+    {
+        float weighted_sum = 0.0;
+        uint total_count = 0;
+
+        for (uint i = 1; i < 256; i++)
+        {
+            uint count = shared_histogram[i];
+            float log_lum = (float(i) - 1.0) / 254.0 * pc.log_lum_range + pc.min_log_lum;
+            weighted_sum += log_lum * float(count);
+            total_count += count;
+        }
+
+        float avg_log_lum;
+        if (total_count > 0)
+        {
+            avg_log_lum = weighted_sum / float(total_count);
+        }
+        else
+        {
+            avg_log_lum = 0.0;
+        }
+
+        // Convert average log-luminance to exposure
+        float avg_lum = exp2(avg_log_lum);
+        // Key value / average luminance gives target exposure
+        // Using a key value of 0.18 (middle gray)
+        float target = 0.18 / max(avg_lum, 0.001);
+        target = clamp(target, 0.1, 10.0);
+
+        exposure_buf.target_exposure = target;
+
+        // Temporal smoothing: exponential moving average
+        float current = exposure_buf.current_exposure;
+        if (current <= 0.0)
+        {
+            // First frame initialization
+            exposure_buf.current_exposure = target;
+        }
+        else
+        {
+            float speed = pc.adaptation_speed * pc.time_delta;
+            speed = clamp(speed, 0.0, 1.0);
+            exposure_buf.current_exposure = current + (target - current) * speed;
+        }
+    }
+}

@@ -43,19 +43,9 @@ layout(set = 1, binding = 2) uniform sampler2D brdf_lut;
 layout(set = 2, binding = 0) uniform sampler2DShadow shadow_map;
 
 layout(location = 0) out vec4 out_color;
+layout(location = 1) out vec4 out_normal; // xyz = encoded normal, w = roughness
 
 const float PI = 3.14159265359;
-
-// ACES filmic tone mapping
-vec3 aces_tonemap(vec3 x)
-{
-    const float a = 2.51;
-    const float b = 0.03;
-    const float c = 2.43;
-    const float d = 0.59;
-    const float e = 0.14;
-    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
-}
 
 vec3 fresnel_schlick(float cos_theta, vec3 F0)
 {
@@ -141,6 +131,7 @@ void main()
     int debug_mode = int(lights_ubo.light_count.z);
     if (debug_mode == 1) {
         out_color = vec4(N * 0.5 + 0.5, 1.0);
+        out_normal = vec4(N * 0.5 + 0.5, 0.0);
         return;
     } else if (debug_mode == 2) {
         float near_plane = 0.01;
@@ -148,6 +139,7 @@ void main()
         float ndc_depth = gl_FragCoord.z;
         float linear_depth = (2.0 * near_plane) / (far_plane + near_plane - ndc_depth * (far_plane - near_plane));
         out_color = vec4(vec3(linear_depth), 1.0);
+        out_normal = vec4(N * 0.5 + 0.5, 0.0);
         return;
     }
 
@@ -248,11 +240,9 @@ void main()
     vec3 ambient = (kD_ibl * diffuse_ibl + specular_ibl) * ao * ibl_intensity;
     vec3 color = ambient + Lo;
 
-    // Exposure + ACES filmic tone mapping
-    color *= exposure;
-    color = aces_tonemap(color);
-    // Gamma correction
-    color = pow(color, vec3(1.0 / 2.2));
-
+    // Output LINEAR HDR (tone mapping + gamma applied in post-processing blit pass)
     out_color = vec4(color, pc.base_color.a);
+
+    // G-buffer: encoded normal + roughness
+    out_normal = vec4(N * 0.5 + 0.5, roughness);
 }

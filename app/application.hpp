@@ -11,6 +11,7 @@
 #include "resource/camera.hpp"
 #include "resource/transform.hpp"
 #include "ibl/ibl_generator.hpp"
+#include "post_process/post_process_manager.hpp"
 #include "physics/physics_world.hpp"
 #include <vulkan/vulkan.h>
 #include <memory>
@@ -187,6 +188,9 @@ namespace mango::app
         std::array<char, 260> model_path_input_{};
         std::array<char, 64> node_name_input_{};
         VkDescriptorPool imgui_descriptor_pool_ = VK_NULL_HANDLE;
+
+        // Post-processing
+        Post_Process_Manager post_process_manager_;
 
         // Physics
         std::shared_ptr<physics::Physics_World> physics_world_;
