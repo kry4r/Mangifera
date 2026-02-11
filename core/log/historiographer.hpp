@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <iostream>
 #include <fstream>
@@ -13,16 +13,18 @@
 #include <iomanip>
 #include <sstream>
 #include <filesystem>
+#include <type_traits>
+#include <utility>
 
 namespace mango::core {
 
     enum class LogLevel {
-        TRACE = 0,
-        DEBUG = 1,
-        INFO = 2,
-        WARN = 3,
-        ERROR = 4,
-        FATAL = 5
+        UKA_TRACE = 0,
+        UKA_DEBUG = 1,
+        UKA_INFO = 2,
+        UKA_WARN = 3,
+        UKA_ERROR = 4,
+        UKA_FATAL = 5
     };
 
     enum class ConsoleColor {
@@ -71,18 +73,18 @@ namespace mango::core {
         void set_color_output(bool enabled);
 
         void log(LogLevel level, const std::string& message,
-                const std::string& file = "", int line = 0, const std::string& function = "");
+                const std::string& file = "", int line = 0, const std::string& function_name = "");
 
         template<typename... Args>
-        void log_formatted(LogLevel level, const std::string& format,
-                          const std::string& file, int line, const std::string& function, Args&&... args);
+        void log_formatted(LogLevel level, const std::string& format_text,
+                          const std::string& file, int line, const std::string& function_name, Args&&... args);
 
-        void trace(const std::string& message, const std::string& file = "", int line = 0, const std::string& function = "");
-        void debug(const std::string& message, const std::string& file = "", int line = 0, const std::string& function = "");
-        void info(const std::string& message, const std::string& file = "", int line = 0, const std::string& function = "");
-        void warn(const std::string& message, const std::string& file = "", int line = 0, const std::string& function = "");
-        void error(const std::string& message, const std::string& file = "", int line = 0, const std::string& function = "");
-        void fatal(const std::string& message, const std::string& file = "", int line = 0, const std::string& function = "");
+        void trace(const std::string& message, const std::string& file = "", int line = 0, const std::string& function_name = "");
+        void debug(const std::string& message, const std::string& file = "", int line = 0, const std::string& function_name = "");
+        void info(const std::string& message, const std::string& file = "", int line = 0, const std::string& function_name = "");
+        void warn(const std::string& message, const std::string& file = "", int line = 0, const std::string& function_name = "");
+        void error(const std::string& message, const std::string& file = "", int line = 0, const std::string& function_name = "");
+        void fatal(const std::string& message, const std::string& file = "", int line = 0, const std::string& function_name = "");
 
         void flush();
 
@@ -103,7 +105,7 @@ namespace mango::core {
         std::string to_string_helper(T&& val);
 
         template<typename... Args>
-        std::string format_string(const std::string& format, Args&&... args);
+        std::string format_string(const std::string& format_text, Args&&... args);
 
         LogLevel current_level_;
         bool console_output_;
@@ -125,12 +127,12 @@ namespace mango::core {
     };
 
     template<typename... Args>
-    void UkaLogger::log_formatted(LogLevel level, const std::string& format,
-                                  const std::string& file, int line, const std::string& function, Args&&... args) {
+    void UkaLogger::log_formatted(LogLevel level, const std::string& format_text,
+                                  const std::string& file, int line, const std::string& function_name, Args&&... args) {
         if (level < current_level_) return;
 
-        std::string formatted_message = format_string(format, std::forward<Args>(args)...);
-        log(level, formatted_message, file, line, function);
+        std::string formatted_message = format_string(format_text, std::forward<Args>(args)...);
+        log(level, formatted_message, file, line, function_name);
     }
 
     template<typename T>
@@ -147,11 +149,11 @@ namespace mango::core {
     }
 
     template<typename... Args>
-    std::string UkaLogger::format_string(const std::string& format, Args&&... args) {
+    std::string UkaLogger::format_string(const std::string& format_text, Args&&... args) {
         if constexpr (sizeof...(args) == 0) {
-            return format;
+            return format_text;
         } else {
-            std::string result = format;
+            std::string result = format_text;
             size_t pos = 0;
             ((pos = result.find("{}", pos),
               pos != std::string::npos ?
@@ -170,12 +172,12 @@ namespace mango::core {
 #define UKA_LOG_ERROR(msg) mango::core::UkaLogger::instance().error(msg, __FILE__, __LINE__, __FUNCTION__)
 #define UKA_LOG_FATAL(msg) mango::core::UkaLogger::instance().fatal(msg, __FILE__, __LINE__, __FUNCTION__)
 
-#define UKA_LOG_TRACE_FMT(format, ...) mango::core::UkaLogger::instance().log_formatted(mango::core::LogLevel::TRACE, format, __FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
-#define UKA_LOG_DEBUG_FMT(format, ...) mango::core::UkaLogger::instance().log_formatted(mango::core::LogLevel::DEBUG, format, __FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
-#define UKA_LOG_INFO_FMT(format, ...) mango::core::UkaLogger::instance().log_formatted(mango::core::LogLevel::INFO, format, __FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
-#define UKA_LOG_WARN_FMT(format, ...) mango::core::UkaLogger::instance().log_formatted(mango::core::LogLevel::WARN, format, __FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
-#define UKA_LOG_ERROR_FMT(format, ...) mango::core::UkaLogger::instance().log_formatted(mango::core::LogLevel::ERROR, format, __FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
-#define UKA_LOG_FATAL_FMT(format, ...) mango::core::UkaLogger::instance().log_formatted(mango::core::LogLevel::FATAL, format, __FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
+#define UKA_LOG_TRACE_FMT(format, ...) mango::core::UkaLogger::instance().log_formatted(mango::core::LogLevel::UKA_TRACE, format, __FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
+#define UKA_LOG_DEBUG_FMT(format, ...) mango::core::UkaLogger::instance().log_formatted(mango::core::LogLevel::UKA_DEBUG, format, __FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
+#define UKA_LOG_INFO_FMT(format, ...) mango::core::UkaLogger::instance().log_formatted(mango::core::LogLevel::UKA_INFO, format, __FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
+#define UKA_LOG_WARN_FMT(format, ...) mango::core::UkaLogger::instance().log_formatted(mango::core::LogLevel::UKA_WARN, format, __FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
+#define UKA_LOG_ERROR_FMT(format, ...) mango::core::UkaLogger::instance().log_formatted(mango::core::LogLevel::UKA_ERROR, format, __FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
+#define UKA_LOG_FATAL_FMT(format, ...) mango::core::UkaLogger::instance().log_formatted(mango::core::LogLevel::UKA_FATAL, format, __FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
 
 #define UH_TRACE(msg) UKA_LOG_TRACE(msg)
 #define UH_DEBUG(msg) UKA_LOG_DEBUG(msg)

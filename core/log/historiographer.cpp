@@ -10,7 +10,7 @@ UkaLogger& UkaLogger::instance() {
 }
 
 UkaLogger::UkaLogger()
-    : current_level_(LogLevel::INFO)
+    : current_level_(LogLevel::UKA_INFO)
     , console_output_(true)
     , file_output_(true)
     , async_mode_(true)
@@ -108,7 +108,7 @@ void UkaLogger::init_log_file() {
 }
 
 void UkaLogger::log(LogLevel level, const std::string& message,
-                   const std::string& file, int line, const std::string& function) {
+                   const std::string& file, int line, const std::string& function_name) {
     if (level < current_level_) {
         return;
     }
@@ -119,7 +119,7 @@ void UkaLogger::log(LogLevel level, const std::string& message,
     entry.timestamp = format_timestamp();
     entry.file = extract_filename(file);
     entry.line = line;
-    entry.function = function;
+    entry.function = function_name;
 
     if (async_mode_) {
         std::lock_guard<std::mutex> lock(queue_mutex_);
@@ -220,24 +220,24 @@ std::string UkaLogger::format_timestamp() {
 
 std::string UkaLogger::get_level_string(LogLevel level) {
     switch (level) {
-        case LogLevel::TRACE: return "TRACE";
-        case LogLevel::DEBUG: return "DEBUG";
-        case LogLevel::INFO:  return "INFO ";
-        case LogLevel::WARN:  return "WARN ";
-        case LogLevel::ERROR: return "ERROR";
-        case LogLevel::FATAL: return "FATAL";
+        case LogLevel::UKA_TRACE: return "TRACE";
+        case LogLevel::UKA_DEBUG: return "DEBUG";
+        case LogLevel::UKA_INFO:  return "INFO ";
+        case LogLevel::UKA_WARN:  return "WARN ";
+        case LogLevel::UKA_ERROR: return "ERROR";
+        case LogLevel::UKA_FATAL: return "FATAL";
         default: return "UNKNOWN";
     }
 }
 
 ConsoleColor UkaLogger::get_level_color(LogLevel level) {
     switch (level) {
-        case LogLevel::TRACE: return ConsoleColor::BRIGHT_BLACK;
-        case LogLevel::DEBUG: return ConsoleColor::CYAN;
-        case LogLevel::INFO:  return ConsoleColor::GREEN;
-        case LogLevel::WARN:  return ConsoleColor::YELLOW;
-        case LogLevel::ERROR: return ConsoleColor::RED;
-        case LogLevel::FATAL: return ConsoleColor::BRIGHT_RED;
+        case LogLevel::UKA_TRACE: return ConsoleColor::BRIGHT_BLACK;
+        case LogLevel::UKA_DEBUG: return ConsoleColor::CYAN;
+        case LogLevel::UKA_INFO:  return ConsoleColor::GREEN;
+        case LogLevel::UKA_WARN:  return ConsoleColor::YELLOW;
+        case LogLevel::UKA_ERROR: return ConsoleColor::RED;
+        case LogLevel::UKA_FATAL: return ConsoleColor::BRIGHT_RED;
         default: return ConsoleColor::WHITE;
     }
 }
@@ -274,28 +274,28 @@ void UkaLogger::flush() {
     std::cout.flush();
 }
 
-void UkaLogger::trace(const std::string& message, const std::string& file, int line, const std::string& function) {
-    log(LogLevel::TRACE, message, file, line, function);
+void UkaLogger::trace(const std::string& message, const std::string& file, int line, const std::string& function_name) {
+    log(LogLevel::UKA_TRACE, message, file, line, function_name);
 }
 
-void UkaLogger::debug(const std::string& message, const std::string& file, int line, const std::string& function) {
-    log(LogLevel::DEBUG, message, file, line, function);
+void UkaLogger::debug(const std::string& message, const std::string& file, int line, const std::string& function_name) {
+    log(LogLevel::UKA_DEBUG, message, file, line, function_name);
 }
 
-void UkaLogger::info(const std::string& message, const std::string& file, int line, const std::string& function) {
-    log(LogLevel::INFO, message, file, line, function);
+void UkaLogger::info(const std::string& message, const std::string& file, int line, const std::string& function_name) {
+    log(LogLevel::UKA_INFO, message, file, line, function_name);
 }
 
-void UkaLogger::warn(const std::string& message, const std::string& file, int line, const std::string& function) {
-    log(LogLevel::WARN, message, file, line, function);
+void UkaLogger::warn(const std::string& message, const std::string& file, int line, const std::string& function_name) {
+    log(LogLevel::UKA_WARN, message, file, line, function_name);
 }
 
-void UkaLogger::error(const std::string& message, const std::string& file, int line, const std::string& function) {
-    log(LogLevel::ERROR, message, file, line, function);
+void UkaLogger::error(const std::string& message, const std::string& file, int line, const std::string& function_name) {
+    log(LogLevel::UKA_ERROR, message, file, line, function_name);
 }
 
-void UkaLogger::fatal(const std::string& message, const std::string& file, int line, const std::string& function) {
-    log(LogLevel::FATAL, message, file, line, function);
+void UkaLogger::fatal(const std::string& message, const std::string& file, int line, const std::string& function_name) {
+    log(LogLevel::UKA_FATAL, message, file, line, function_name);
 }
 
 } // namespace uka::historiographer

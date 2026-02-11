@@ -8,8 +8,11 @@ add_library(app STATIC ${APP_SOURCE})
 target_include_directories(app
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/3rdparty
+        ${CMAKE_SOURCE_DIR}/3rdparty/tinyexr
 )
 target_link_libraries(app PUBLIC
+    core
     glfw
     graphics
     imgui

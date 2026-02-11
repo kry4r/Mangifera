@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <functional>
 
 namespace mango::core
 {
@@ -45,5 +46,16 @@ namespace mango::core
     };
 
     constexpr Entity INVALID_ENTITY = Entity{0xFFFFFFFF};
+}
 
+namespace std
+{
+    template<>
+    struct hash<mango::core::Entity>
+    {
+        auto operator()(const mango::core::Entity& entity) const noexcept -> std::size_t
+        {
+            return std::hash<std::uint32_t>{}(entity.id);
+        }
+    };
 }

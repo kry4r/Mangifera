@@ -52,6 +52,19 @@ namespace mango::core
     private:
         EntityList entities;
         std::unordered_map<TwigID, std::unique_ptr<ITwigStorage>> twig_stores;
+
+        template <typename T>
+        auto get_or_create_store(TwigID id) -> TwigStorage<T>&
+        {
+            auto it = twig_stores.find(id);
+            if (it == twig_stores.end()) {
+                auto store = std::make_unique<TwigStorage<T>>();
+                auto* raw_store = store.get();
+                twig_stores.emplace(id, std::move(store));
+                return *raw_store;
+            }
+            return *static_cast<TwigStorage<T>*>(it->second.get());
+        }
     public:
         World();
         ~World();
@@ -109,7 +122,6 @@ namespace mango::core
             auto id = T::get_static_id();
             auto it = twig_stores.find(id);
             if (it == twig_stores.end()) {
-                UKA_LOG_ERROR_FMT("has_twig: twig type {} not exist", T::get_static_id());
                 return false;
             }
             auto& store = *static_cast<TwigStorage<T>*>(it->second.get());
@@ -138,6 +150,28 @@ namespace mango::core
             }
 
             return *store.get(entity);
+        }
+
+        template <typename T>
+        auto get_twig_storage() -> TwigStorage<T>*
+        {
+            auto id = T::get_static_id();
+            auto it = twig_stores.find(id);
+            if (it == twig_stores.end()) {
+                return nullptr;
+            }
+            return static_cast<TwigStorage<T>*>(it->second.get());
+        }
+
+        template <typename T>
+        auto get_twig_storage() const -> const TwigStorage<T>*
+        {
+            auto id = T::get_static_id();
+            auto it = twig_stores.find(id);
+            if (it == twig_stores.end()) {
+                return nullptr;
+            }
+            return static_cast<const TwigStorage<T>*>(it->second.get());
         }
 
         void clear_all();

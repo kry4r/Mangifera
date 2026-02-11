@@ -1,5 +1,6 @@
 #include "vk-graphics-pipeline-state.hpp"
 #include "vulkan-render-resource/vk-shader.hpp"
+#include "vulkan-render-resource/vk-descriptor-set.hpp"
 #include "log/historiographer.hpp"
 #include <stdexcept>
 #include <vector>
@@ -48,8 +49,26 @@ namespace mango::graphics::vk
 
     void Vk_Graphics_Pipeline_State::create_pipeline_layout()
     {
+        const auto& desc = get_desc();
         Pipeline_Layout_Desc layout_desc{};
-        //TODO:RTemporarily simplified, reflection or explicit specification can be implemented from shaders later
+
+        for (const auto& layout : desc.descriptor_set_layouts) {
+            auto vk_layout = std::dynamic_pointer_cast<Vk_Descriptor_Set_Layout>(layout);
+            if (!vk_layout) {
+                throw std::runtime_error("Invalid descriptor set layout for Vulkan pipeline");
+            }
+            layout_desc.descriptor_set_layouts.push_back(vk_layout->get_vk_layout());
+        }
+
+        for (const auto& range : desc.push_constants) {
+            VkPushConstantRange vk_range{};
+            vk_range.offset = range.offset;
+            vk_range.size = range.size;
+            vk_range.stageFlags = range.shader_stages == 0
+                ? VK_SHADER_STAGE_ALL
+                : static_cast<VkShaderStageFlags>(range.shader_stages);
+            layout_desc.push_constant_ranges.push_back(vk_range);
+        }
 
         m_pipeline_layout = std::make_unique<Vk_Pipeline_Layout>(m_device, layout_desc);
     }
@@ -152,11 +171,21 @@ namespace mango::graphics::vk
         std::vector<VkVertexInputBindingDescription> binding_descriptions;
         std::vector<VkVertexInputAttributeDescription> attribute_descriptions;
 
+        auto format_from_semantic = [](const std::string& semantic) {
+            if (semantic.find("TEXCOORD") != std::string::npos) {
+                return VK_FORMAT_R32G32_SFLOAT;
+            }
+            if (semantic.find("COLOR") != std::string::npos) {
+                return VK_FORMAT_R32G32B32A32_SFLOAT;
+            }
+            return VK_FORMAT_R32G32B32_SFLOAT;
+        };
+
         for (const auto& attr : desc.vertex_attributes) {
             VkVertexInputAttributeDescription vk_attr{};
             vk_attr.location = attr.location;
             vk_attr.binding = 0;
-            vk_attr.format = VK_FORMAT_R32G32B32_SFLOAT; // TODO:Simplified implementation, requires judgment based on actual circumstances
+            vk_attr.format = format_from_semantic(attr.semantic);
             vk_attr.offset = attr.offset;
             attribute_descriptions.push_back(vk_attr);
         }
@@ -197,7 +226,10 @@ namespace mango::graphics::vk
         rasterizer.lineWidth = 1.0f;
         rasterizer.cullMode = desc.rasterizer_state.cull_enable ? VK_CULL_MODE_BACK_BIT : VK_CULL_MODE_NONE;
         rasterizer.frontFace = desc.rasterizer_state.front_ccw ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE;
-        rasterizer.depthBiasEnable = VK_FALSE;
+        rasterizer.depthBiasEnable = desc.rasterizer_state.depth_bias_enable ? VK_TRUE : VK_FALSE;
+        rasterizer.depthBiasConstantFactor = desc.rasterizer_state.depth_bias_constant;
+        rasterizer.depthBiasSlopeFactor = desc.rasterizer_state.depth_bias_slope;
+        rasterizer.depthBiasClamp = 0.0f;
 
         // Multisample state
         VkPipelineMultisampleStateCreateInfo multisampling{};

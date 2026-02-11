@@ -1,7 +1,11 @@
 cmake_minimum_required(VERSION 3.16)
 project(Mangifera)
 
+cmake_policy(SET CMP0091 NEW)
 set(CMAKE_CXX_STANDARD 20)
+if(MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+endif()
 find_package(Vulkan REQUIRED)
 
 message(STATUS "Vulkan include: ${Vulkan_INCLUDE_DIRS}")
@@ -26,6 +30,9 @@ add_subdirectory(3rdparty/spirv-reflect)
 set(SHADERC_SKIP_TESTS ON CACHE BOOL "Skip building tests" FORCE)
 set(SHADERC_SKIP_EXAMPLES ON CACHE BOOL "Skip building examples" FORCE)
 set(SHADERC_SKIP_INSTALL ON CACHE BOOL "Skip shaderc install" FORCE)
+set(SHADERC_SKIP_COPYRIGHT_CHECK ON CACHE BOOL "Skip shaderc copyright check" FORCE)
+set(SHADERC_ENABLE_COPYRIGHT_CHECK OFF CACHE BOOL "Disable shaderc copyright check" FORCE)
+set(SHADERC_ENABLE_SHARED_CRT ON CACHE BOOL "Use shared CRT" FORCE)
 set(CMAKE_SKIP_INSTALL_RULES ON CACHE BOOL "Skip all install() rules" FORCE)
 
 if(WIN32)

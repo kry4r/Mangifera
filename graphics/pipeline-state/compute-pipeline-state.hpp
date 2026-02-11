@@ -1,14 +1,17 @@
 #pragma once
 #include "pipeline-state.hpp"
 #include "render-resource/shader.hpp"
+#include "render-resource/descriptor-set.hpp"
+#include "pipeline-state/graphics-pipeline-state.hpp"
 
 namespace mango::graphics
 {
 
-    // 计算管线描述
     struct Compute_Pipeline_Desc
     {
         std::shared_ptr<Shader> compute_shader;
+        std::vector<Descriptor_Set_Layout_Handle> descriptor_set_layouts;
+        std::vector<Push_Constant_Range> push_constants;
     };
 
     struct Compute_Pipeline_State: public Pipeline_State

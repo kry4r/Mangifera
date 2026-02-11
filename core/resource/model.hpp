@@ -36,4 +36,6 @@ namespace mango::resource
 
         auto get_material(size_t idx) const -> const std::string&;
     };
+
+    auto load_model_from_obj(const std::string& path) -> std::shared_ptr<Model>;
 }

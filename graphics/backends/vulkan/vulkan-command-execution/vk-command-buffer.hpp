@@ -109,6 +109,7 @@ namespace mango::graphics::vk
         VkPipeline m_current_pipeline = VK_NULL_HANDLE;
         VkPipelineLayout m_current_pipeline_layout = VK_NULL_HANDLE;
         VkPipelineBindPoint m_current_bind_point = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        VkShaderStageFlags m_current_push_constant_stages = VK_SHADER_STAGE_ALL;
     };
 
 } // namespace mango::graphics::vk

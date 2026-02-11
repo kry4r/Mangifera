@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__filesystem__read_text_file",
+      "Bash(curl:*)",
+      "Bash(git checkout:*)",
+      "Bash(cmake --build:*)",
+      "Bash(\"Debug\\\\Mangifera.exe\")",
+      "Bash(powershell:*)",
+      "Bash(timeout:*)",
+      "mcp__filesystem__list_directory",
+      "Bash(cd:*)",
+      "Bash(findstr:*)"
+    ]
+  }
+}

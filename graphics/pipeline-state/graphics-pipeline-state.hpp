@@ -4,6 +4,7 @@
 #include "render-resource/sampler.hpp"
 #include "render-resource/shader.hpp"
 #include "render-resource/texture.hpp"
+#include "render-resource/descriptor-set.hpp"
 #include "render-pass/render-pass.hpp"
 
 namespace mango::graphics
@@ -21,6 +22,9 @@ namespace mango::graphics
         bool    cull_enable = true;
         bool    wireframe = false;
         bool    front_ccw = true;
+        bool    depth_bias_enable = false;
+        float   depth_bias_constant = 0.0f;
+        float   depth_bias_slope = 0.0f;
     };
 
     struct Depth_Stencil_State
@@ -38,6 +42,13 @@ namespace mango::graphics
     struct Render_Target_Desc
     {
         uint32_t format; // via VkFormat / DXGI_FORMAT
+    };
+
+    struct Push_Constant_Range
+    {
+        uint32_t offset = 0;
+        uint32_t size = 0;
+        uint32_t shader_stages = 0;
     };
 
     struct Graphics_Pipeline_Desc
@@ -58,6 +69,9 @@ namespace mango::graphics
 
         std::vector<Render_Target_Desc> render_targets;
         uint32_t depth_stencil_format = 0; // optional
+
+        std::vector<Descriptor_Set_Layout_Handle> descriptor_set_layouts;
+        std::vector<Push_Constant_Range> push_constants;
 
         std::shared_ptr<Render_Pass> render_pass;
         uint32_t subpass = 0;

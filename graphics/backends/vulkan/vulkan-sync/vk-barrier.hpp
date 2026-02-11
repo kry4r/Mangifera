@@ -1,28 +1,23 @@
-#pragma once
+﻿#pragma once
 #include "sync/barrier.hpp"
 #include <vulkan/vulkan.h>
 #include <vector>
 
 namespace mango::graphics::vk
 {
-    // Vulkan 专用的 Barrier，提供更精细的控制
     struct Vk_Barrier : public Barrier
     {
-        // 子资源范围控制（用于 Texture）
         uint32_t base_mip_level = 0;
         uint32_t mip_level_count = VK_REMAINING_MIP_LEVELS; // 所有 mip levels
         uint32_t base_array_layer = 0;
         uint32_t array_layer_count = VK_REMAINING_ARRAY_LAYERS; // 所有 array layers
 
-        // 队列族转换（用于跨队列传输）
         uint32_t src_queue_family = VK_QUEUE_FAMILY_IGNORED;
         uint32_t dst_queue_family = VK_QUEUE_FAMILY_IGNORED;
 
-        // 更精细的 pipeline stage 控制（可选，如果为 0 则使用默认映射）
         VkPipelineStageFlags src_stage_mask = 0;
         VkPipelineStageFlags dst_stage_mask = 0;
 
-        // 更精细的 access flags 控制（可选，如果为 0 则使用默认映射）
         VkAccessFlags src_access_mask = 0;
         VkAccessFlags dst_access_mask = 0;
 

@@ -24,6 +24,7 @@ namespace mango::graphics::vk
         Vk_Pipeline_Layout& operator=(Vk_Pipeline_Layout&& other) noexcept;
 
         auto get_vk_pipeline_layout() const -> VkPipelineLayout { return m_pipeline_layout; }
+        auto get_push_constant_ranges() const -> const std::vector<VkPushConstantRange>& { return m_push_constant_ranges; }
 
     private:
         void create_pipeline_layout(const Pipeline_Layout_Desc& desc);
@@ -31,6 +32,7 @@ namespace mango::graphics::vk
 
         VkDevice m_device = VK_NULL_HANDLE;
         VkPipelineLayout m_pipeline_layout = VK_NULL_HANDLE;
+        std::vector<VkPushConstantRange> m_push_constant_ranges;
     };
 
 } // namespace mango::graphics::vk

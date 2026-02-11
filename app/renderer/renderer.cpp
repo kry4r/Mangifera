@@ -315,17 +315,8 @@ namespace mango::app
         cmd->reset();
         cmd->begin();
 
-        cmd->begin_render_pass(
-            render_pass_,
-            framebuffers_[current_image_index_],
-            width_,
-            height_
-        );
-
-        cmd->set_viewport(0.0f, 0.0f,
-            static_cast<float>(width_),
-            static_cast<float>(height_));
-        cmd->set_scissor(0, 0, width_, height_);
+        // Note: render pass is NOT started here — it starts in render_frame()
+        // after pre_render_callback_ (e.g. shadow pass) has executed
 
         frame_started_ = true;
     }
@@ -373,9 +364,29 @@ namespace mango::app
             return;
         }
 
+        auto& cmd = command_buffers_[current_frame_];
+
+        // Pre-render callback (shadow pass, runs OUTSIDE main render pass)
+        if (pre_render_callback_) {
+            pre_render_callback_(cmd);
+        }
+
+        // Begin main render pass
+        cmd->begin_render_pass(
+            render_pass_,
+            framebuffers_[current_image_index_],
+            width_,
+            height_
+        );
+
+        cmd->set_viewport(0.0f, 0.0f,
+            static_cast<float>(width_),
+            static_cast<float>(height_));
+        cmd->set_scissor(0, 0, width_, height_);
+
         // Execute custom rendering if callback is set
         if (render_callback_) {
-            render_callback_(command_buffers_[current_frame_]);
+            render_callback_(cmd);
         }
 
         end_frame();
@@ -390,9 +401,22 @@ namespace mango::app
         return command_buffers_[current_frame_];
     }
 
+    auto Renderer::get_swapchain_image_count() const -> uint32_t
+    {
+        if (!swapchain_) {
+            return 0;
+        }
+        return swapchain_->get_desc().image_count;
+    }
+
     void Renderer::set_render_callback(RenderCallback callback)
     {
         render_callback_ = std::move(callback);
+    }
+
+    void Renderer::set_pre_render_callback(RenderCallback callback)
+    {
+        pre_render_callback_ = std::move(callback);
     }
 
     void Renderer::wait_idle()

@@ -1,5 +1,6 @@
 #include "vk-compute-pipeline-state.hpp"
 #include "vulkan-render-resource/vk-shader.hpp"
+#include "vulkan-render-resource/vk-descriptor-set.hpp"
 #include "log/historiographer.hpp"
 #include <stdexcept>
 
@@ -47,8 +48,26 @@ namespace mango::graphics::vk
 
     void Vk_Compute_Pipeline_State::create_pipeline_layout()
     {
+        const auto& desc = get_desc();
         Pipeline_Layout_Desc layout_desc{};
-        //TODO:RTemporarily simplified, reflection or explicit specification can be implemented from shaders later
+
+        for (const auto& layout : desc.descriptor_set_layouts) {
+            auto vk_layout = std::dynamic_pointer_cast<Vk_Descriptor_Set_Layout>(layout);
+            if (!vk_layout) {
+                throw std::runtime_error("Invalid descriptor set layout for compute pipeline");
+            }
+            layout_desc.descriptor_set_layouts.push_back(vk_layout->get_vk_layout());
+        }
+
+        for (const auto& range : desc.push_constants) {
+            VkPushConstantRange vk_range{};
+            vk_range.offset = range.offset;
+            vk_range.size = range.size;
+            vk_range.stageFlags = range.shader_stages == 0
+                ? VK_SHADER_STAGE_COMPUTE_BIT
+                : static_cast<VkShaderStageFlags>(range.shader_stages);
+            layout_desc.push_constant_ranges.push_back(vk_range);
+        }
 
         m_pipeline_layout = std::make_unique<Vk_Pipeline_Layout>(m_device, layout_desc);
     }

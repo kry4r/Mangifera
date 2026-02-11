@@ -1,6 +1,6 @@
 #include "vk-semaphore.hpp"
-#include "log/historiographer.hpp"
 #include <stdexcept>
+#include <iostream>
 
 namespace mango::graphics::vk
 {
@@ -59,8 +59,9 @@ namespace mango::graphics::vk
             throw std::runtime_error("Failed to create Vulkan semaphore");
         }
 
-        UH_INFO_FMT("Semaphore created (type: {})",
-            desc.type == Semaphore_Type::binary ? "binary" : "timeline");
+        std::cout << "[Semaphore] created (type: "
+                  << (desc.type == Semaphore_Type::binary ? "binary" : "timeline")
+                  << ")\n";
     }
 
     std::uint64_t Vk_Semaphore::get_value() const
@@ -108,7 +109,7 @@ namespace mango::graphics::vk
         VkResult result = vkWaitSemaphores(m_device, &wait_info, UINT64_MAX);
 
         if (result == VK_TIMEOUT) {
-            UH_WARN("Semaphore wait timed out");
+            std::cerr << "[Semaphore] wait timed out\n";
         } else if (result != VK_SUCCESS) {
             throw std::runtime_error("Failed to wait for semaphore");
         }
@@ -119,7 +120,7 @@ namespace mango::graphics::vk
         if (m_semaphore != VK_NULL_HANDLE) {
             vkDestroySemaphore(m_device, m_semaphore, nullptr);
             m_semaphore = VK_NULL_HANDLE;
-            UH_INFO("Semaphore destroyed");
+            std::cout << "[Semaphore] destroyed\n";
         }
     }
 

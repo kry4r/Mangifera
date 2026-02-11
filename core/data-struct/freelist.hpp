@@ -80,7 +80,7 @@ namespace mango::core
             return exists(e) ? &data_[e.get_index()] : nullptr;
         }
 
-        auto get_count() -> int
+        auto get_count() const -> int
         {
             return size_;
         }

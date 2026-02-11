@@ -17,6 +17,11 @@ namespace mango::core
         return entities.exists(entity);
     }
 
+    auto World::get_entities_count() const -> std::size_t
+    {
+        return static_cast<std::size_t>(entities.get_count());
+    }
+
     auto World::create_entity() -> Entity
     {
         return entities.allocate();
@@ -27,5 +32,10 @@ namespace mango::core
         return entities.deallocate(entity);
     }
 
+    void World::clear_all()
+    {
+        twig_stores.clear();
+        entities = EntityList();
+    }
 
 }

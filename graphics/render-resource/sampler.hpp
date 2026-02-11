@@ -12,12 +12,19 @@ namespace mango::graphics
         clamp,
     };
 
+    enum struct Border_Color {
+        float_opaque_black,
+        float_opaque_white,
+    };
+
     struct Sampler_Desc {
         Filter_Mode minFilter = Filter_Mode::linear;
         Filter_Mode magFilter = Filter_Mode::linear;
         Edge_Mode addressU = Edge_Mode::clamp;
         Edge_Mode addressV = Edge_Mode::clamp;
         Edge_Mode addressW = Edge_Mode::clamp;
+        bool comparison_enable = false;
+        Border_Color border_color = Border_Color::float_opaque_black;
     };
 
     class Sampler {

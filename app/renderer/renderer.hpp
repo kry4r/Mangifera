@@ -61,11 +61,15 @@ namespace mango::app
         auto get_width() const -> uint32_t { return width_; }
         auto get_height() const -> uint32_t { return height_; }
         auto get_current_frame_index() const -> uint32_t { return current_frame_; }
+        auto get_swapchain_image_count() const -> uint32_t;
         auto get_scene_graph() -> core::Scene_Graph* { return core::Scene_Graph::current_instance(); }
+        auto get_command_pool() -> graphics::Command_Pool_Handle { return command_pool_; }
+        auto get_graphics_queue() -> graphics::Command_Queue_Handle { return graphics_queue_; }
 
-        // Callback for custom rendering
+        // Callbacks for rendering
         using RenderCallback = std::function<void(graphics::Command_Buffer_Handle)>;
         void set_render_callback(RenderCallback callback);
+        void set_pre_render_callback(RenderCallback callback);
 
     private:
         // Initialization
@@ -123,6 +127,7 @@ namespace mango::app
 
         // Custom rendering
         RenderCallback render_callback_;
+        RenderCallback pre_render_callback_;
 
         // Flags
         bool swapchain_needs_recreation_ = false;

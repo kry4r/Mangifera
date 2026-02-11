@@ -1,4 +1,4 @@
-#include "vk-descriptor-set.hpp"
+﻿#include "vk-descriptor-set.hpp"
 #include "vk-buffer.hpp"
 #include "vk-texture.hpp"
 #include "vk-sampler.hpp"
@@ -102,10 +102,8 @@ namespace mango::graphics::vk
 
     VkShaderStageFlags Vk_Descriptor_Set_Layout::to_vk_shader_stages(uint32_t stages) const
     {
-        // 假设 stages 是按位的 shader stage flags
-        // 你可能需要根据实际的 shader stage 枚举来转换
         if (stages == 0) {
-            return VK_SHADER_STAGE_ALL; // 默认所有阶段
+            return VK_SHADER_STAGE_ALL;
         }
         return static_cast<VkShaderStageFlags>(stages);
     }
@@ -274,7 +272,11 @@ namespace mango::graphics::vk
                     }
 
                     VkDescriptorImageInfo image_info{};
-                    image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                    // Storage images must use GENERAL layout
+                    bool is_storage = (write.type == Descriptor_Type::storage_texture);
+                    image_info.imageLayout = is_storage
+                        ? VK_IMAGE_LAYOUT_GENERAL
+                        : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
                     image_info.imageView = vk_texture->get_vk_image_view();
                     image_info.sampler = VK_NULL_HANDLE;
                     image_infos.push_back(image_info);

@@ -13,35 +13,37 @@ namespace mango::core
     struct Scene_Graph : core::Singleton<Scene_Graph>
     {
     private:
-        Scene_Node root;
-        Scene_Node current_selected_node;
-        std::vector<std::pair<Entity,Scene_Node>> entities_mapping;
+        std::shared_ptr<Scene_Node> root;
+        std::shared_ptr<Scene_Node> current_selected_node;
+        std::vector<std::pair<Entity, std::shared_ptr<Scene_Node>>> entities_mapping;
     public:
 
         Scene_Graph();
 
-        auto get_root_node() -> Scene_Node;
+        auto get_root_node() -> std::shared_ptr<Scene_Node>;
 
-        auto get_current_selected_node() -> Scene_Node;
+        auto get_current_selected_node() -> std::shared_ptr<Scene_Node>;
+
+        auto set_current_selected_node(std::shared_ptr<Scene_Node> node) -> void;
 
         auto read_write_graph() -> Scene_Graph*;
 
         auto read_only_graph() -> const Scene_Graph*;
 
-        auto path_of(Scene_Node node) -> std::string;
+        auto path_of(std::shared_ptr<Scene_Node> node) -> std::string;
 
-        auto node_of(std::string path) -> std::shared_ptr<Scene_Node>;
+        auto node_of(const std::string& path) -> std::shared_ptr<Scene_Node>;
 
-        auto name_of(Scene_Node node) -> std::string;
+        auto name_of(std::shared_ptr<Scene_Node> node) -> std::string;
 
-        auto parent_of(Scene_Node node) -> std::shared_ptr<Scene_Node>;
+        auto parent_of(std::shared_ptr<Scene_Node> node) -> std::shared_ptr<Scene_Node>;
 
-        auto first_child_of(Scene_Node node) -> std::shared_ptr<Scene_Node>;
+        auto first_child_of(std::shared_ptr<Scene_Node> node) -> std::shared_ptr<Scene_Node>;
 
-        auto next_decendent_of(Scene_Node node) ->std::shared_ptr<Scene_Node>;
+        auto next_decendent_of(std::shared_ptr<Scene_Node> node) -> std::shared_ptr<Scene_Node>;
 
-        auto add_entity_to_scene(Entity entity, Scene_Node parent) -> void;
+        auto add_entity_to_scene(Entity entity, std::shared_ptr<Scene_Node> parent, const std::string& name = "") -> std::shared_ptr<Scene_Node>;
 
-        auto get_entities_mapping() -> std::vector<std::pair<Entity,Scene_Node>> {return entities_mapping;}
+        auto get_entities_mapping() const -> const std::vector<std::pair<Entity, std::shared_ptr<Scene_Node>>>& { return entities_mapping; }
     };
 }

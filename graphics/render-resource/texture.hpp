@@ -71,6 +71,7 @@ namespace mango::graphics
         uint32_t arrayLayers = 1;
         bool sampled = true;
         bool render_target = false;
+        bool storage = false;  // For compute shader read/write (VK_IMAGE_USAGE_STORAGE_BIT)
     };
 
     class Texture {

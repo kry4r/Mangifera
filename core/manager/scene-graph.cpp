@@ -5,21 +5,31 @@ namespace mango::core
 {
     Scene_Graph::Scene_Graph()
     {
-        root = Scene_Node();
-        root.id = 0;
-        root.name = "Scene";
+        root = std::make_shared<Scene_Node>();
+        root->id = 0;
+        root->name = "Scene";
+        root->parent = nullptr;
+        root->children = nullptr;
+        root->next = nullptr;
 
         current_selected_node = root;
     }
 
-    auto Scene_Graph::get_root_node() -> Scene_Node
+    auto Scene_Graph::get_root_node() -> std::shared_ptr<Scene_Node>
     {
         return root;
     }
 
-    auto Scene_Graph::get_current_selected_node() -> Scene_Node
+    auto Scene_Graph::get_current_selected_node() -> std::shared_ptr<Scene_Node>
     {
         return current_selected_node;
+    }
+
+    auto Scene_Graph::set_current_selected_node(std::shared_ptr<Scene_Node> node) -> void
+    {
+        if (node) {
+            current_selected_node = node;
+        }
     }
 
     auto Scene_Graph::read_write_graph() -> Scene_Graph*
@@ -32,18 +42,33 @@ namespace mango::core
         return current_instance();
     }
 
-    auto Scene_Graph::path_of(Scene_Node node) -> std::string
+    auto Scene_Graph::path_of(std::shared_ptr<Scene_Node> node) -> std::string
     {
-        auto parent = node.parent;
-        auto path = node.name;
-        while (parent->id != root.id) {
-            path = parent->name + "/" + path;
-            parent = parent->parent;
+        if (!node) {
+            return "";
+        }
+
+        std::vector<std::string> parts;
+        auto current = node;
+        while (current) {
+            parts.push_back(current->name);
+            if (current == root) {
+                break;
+            }
+            current = current->parent;
+        }
+
+        std::string path;
+        for (auto it = parts.rbegin(); it != parts.rend(); ++it) {
+            if (!path.empty()) {
+                path += "/";
+            }
+            path += *it;
         }
         return path;
     }
 
-    auto Scene_Graph::node_of(std::string path) -> std::shared_ptr<Scene_Node>
+    auto Scene_Graph::node_of(const std::string& path) -> std::shared_ptr<Scene_Node>
     {
         std::stringstream ss(path);
         std::string segment;
@@ -53,13 +78,23 @@ namespace mango::core
                 parts.push_back(segment);
         }
 
+        if (parts.empty()) {
+            return root;
+        }
+
         auto current = root;
-        for (const auto& name : parts) {
+        size_t index = 0;
+        if (!parts.empty() && parts.front() == root->name) {
+            index = 1;
+        }
+
+        for (; index < parts.size(); ++index) {
+            const auto& name = parts[index];
             bool found = false;
-            auto child = current.children;
+            auto child = current->children;
             while (child) {
                 if (child->name == name) {
-                    current = *child.get();
+                    current = child;
                     found = true;
                     break;
                 }
@@ -71,40 +106,50 @@ namespace mango::core
             }
         }
 
-        return std::make_shared<Scene_Node>(current);
+        return current;
     }
 
-    auto Scene_Graph::name_of(Scene_Node node) -> std::string
+    auto Scene_Graph::name_of(std::shared_ptr<Scene_Node> node) -> std::string
     {
-        return node.name;
+        return node ? node->name : "";
     }
 
-    auto Scene_Graph::parent_of(Scene_Node node) -> std::shared_ptr<Scene_Node>
+    auto Scene_Graph::parent_of(std::shared_ptr<Scene_Node> node) -> std::shared_ptr<Scene_Node>
     {
-        return node.parent;
+        return node ? node->parent : nullptr;
     }
 
-    auto Scene_Graph::first_child_of(Scene_Node node) -> std::shared_ptr<Scene_Node>
+    auto Scene_Graph::first_child_of(std::shared_ptr<Scene_Node> node) -> std::shared_ptr<Scene_Node>
     {
-        return node.children;
+        return node ? node->children : nullptr;
     }
 
-    auto Scene_Graph::next_decendent_of(Scene_Node node) ->std::shared_ptr<Scene_Node>
+    auto Scene_Graph::next_decendent_of(std::shared_ptr<Scene_Node> node) -> std::shared_ptr<Scene_Node>
     {
-        return node.next;
+        return node ? node->next : nullptr;
     }
 
-    auto Scene_Graph::add_entity_to_scene(Entity entity, Scene_Node parent) -> void
+    auto Scene_Graph::add_entity_to_scene(Entity entity, std::shared_ptr<Scene_Node> parent, const std::string& name) -> std::shared_ptr<Scene_Node>
     {
-        auto new_node = std::make_shared<Scene_Node>();
-        new_node->name = "Entity " + std::to_string(entity.id);
-
-        if (parent.children) {
-            parent.children->next = new_node;
-        } else {
-            parent.children = new_node;
+        if (!parent) {
+            parent = root;
         }
 
-        entities_mapping.push_back({entity, *new_node});
+        auto new_node = std::make_shared<Scene_Node>();
+        new_node->name = name.empty() ? ("Entity " + std::to_string(entity.id)) : name;
+        new_node->parent = parent;
+
+        if (parent->children) {
+            auto current = parent->children;
+            while (current->next) {
+                current = current->next;
+            }
+            current->next = new_node;
+        } else {
+            parent->children = new_node;
+        }
+
+        entities_mapping.push_back({entity, new_node});
+        return new_node;
     }
 }

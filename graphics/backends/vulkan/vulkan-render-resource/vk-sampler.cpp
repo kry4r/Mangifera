@@ -65,8 +65,8 @@ namespace mango::graphics::vk
         sampler_info.addressModeV = edge_mode_to_vk(m_desc.addressV);
         sampler_info.addressModeW = edge_mode_to_vk(m_desc.addressW);
 
-        // Anisotropic filtering (enable if using linear filtering)
-        if (m_desc.minFilter == Filter_Mode::linear || m_desc.magFilter == Filter_Mode::linear) {
+        // Anisotropic filtering (enable if using linear filtering, disable for comparison samplers)
+        if (!m_desc.comparison_enable && (m_desc.minFilter == Filter_Mode::linear || m_desc.magFilter == Filter_Mode::linear)) {
             sampler_info.anisotropyEnable = VK_TRUE;
             sampler_info.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
         } else {
@@ -74,15 +74,17 @@ namespace mango::graphics::vk
             sampler_info.maxAnisotropy = 1.0f;
         }
 
-        // Border color (for clamp to border mode)
-        sampler_info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+        // Border color
+        sampler_info.borderColor = (m_desc.border_color == Border_Color::float_opaque_white)
+            ? VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE
+            : VK_BORDER_COLOR_INT_OPAQUE_BLACK;
 
         // Unnormalized coordinates (false = use [0, 1] range)
         sampler_info.unnormalizedCoordinates = VK_FALSE;
 
-        // Comparison (for shadow mapping, disabled by default)
-        sampler_info.compareEnable = VK_FALSE;
-        sampler_info.compareOp = VK_COMPARE_OP_ALWAYS;
+        // Comparison (for shadow mapping)
+        sampler_info.compareEnable = m_desc.comparison_enable ? VK_TRUE : VK_FALSE;
+        sampler_info.compareOp = m_desc.comparison_enable ? VK_COMPARE_OP_LESS : VK_COMPARE_OP_ALWAYS;
 
         // Mipmap settings
         sampler_info.mipmapMode = (m_desc.minFilter == Filter_Mode::linear)

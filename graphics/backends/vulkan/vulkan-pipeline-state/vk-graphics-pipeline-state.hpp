@@ -20,6 +20,14 @@ namespace mango::graphics::vk
         // Vulkan specific
         auto get_vk_pipeline() const -> VkPipeline { return m_pipeline; }
         auto get_vk_pipeline_layout() const -> VkPipelineLayout { return m_pipeline_layout->get_vk_pipeline_layout(); }
+        auto get_push_constant_stages() const -> VkShaderStageFlags {
+            VkShaderStageFlags flags = 0;
+            if (m_pipeline_layout) {
+                for (auto& r : m_pipeline_layout->get_push_constant_ranges())
+                    flags |= r.stageFlags;
+            }
+            return flags;
+        }
 
     private:
         void create_pipeline(VkRenderPass render_pass);

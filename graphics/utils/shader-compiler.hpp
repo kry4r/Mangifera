@@ -6,7 +6,7 @@
 
 namespace mango::graphics::utils
 {
-    std::vector<uint32_t> compile_shader_form_string(const std::string& source, shaderc_shader_kind kind, const std::string& source_name = "shader.glsl",
+    inline std::vector<uint32_t> compile_shader_form_string(const std::string& source, shaderc_shader_kind kind, const std::string& source_name = "shader.glsl",
                                                 bool optimize = true)
     {
         shaderc::Compiler compiler;

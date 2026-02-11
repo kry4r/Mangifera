@@ -6,6 +6,7 @@ namespace mango::graphics::vk
 {
     Vk_Pipeline_Layout::Vk_Pipeline_Layout(VkDevice device, const Pipeline_Layout_Desc& desc)
         : m_device(device)
+        , m_push_constant_ranges(desc.push_constant_ranges)
     {
         create_pipeline_layout(desc);
     }
@@ -18,6 +19,7 @@ namespace mango::graphics::vk
     Vk_Pipeline_Layout::Vk_Pipeline_Layout(Vk_Pipeline_Layout&& other) noexcept
         : m_device(other.m_device)
         , m_pipeline_layout(other.m_pipeline_layout)
+        , m_push_constant_ranges(std::move(other.m_push_constant_ranges))
     {
         other.m_pipeline_layout = VK_NULL_HANDLE;
         other.m_device = VK_NULL_HANDLE;
@@ -30,6 +32,7 @@ namespace mango::graphics::vk
 
             m_device = other.m_device;
             m_pipeline_layout = other.m_pipeline_layout;
+            m_push_constant_ranges = std::move(other.m_push_constant_ranges);
 
             other.m_pipeline_layout = VK_NULL_HANDLE;
             other.m_device = VK_NULL_HANDLE;

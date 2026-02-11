@@ -284,13 +284,35 @@ namespace mango::graphics::vk
 
     void Vk_Buffer::flush(std::size_t offset, std::size_t size)
     {
-        // Only needed for non-coherent memory
+        // cpu2gpu and cpu_only request HOST_COHERENT memory, so flush is a no-op.
+        // Calling vkFlushMappedMemoryRanges with unaligned size on coherent memory
+        // triggers validation errors, so skip it entirely.
         if (m_desc.memory == Memory_Type::cpu2gpu || m_desc.memory == Memory_Type::cpu_only) {
+            return;
+        }
+        // Only needed for non-coherent memory (e.g. gpu2cpu with HOST_CACHED)
+        if (m_desc.memory == Memory_Type::gpu2cpu) {
+            VkPhysicalDeviceProperties properties{};
+            vkGetPhysicalDeviceProperties(m_physical_device, &properties);
+            std::size_t atom_size = static_cast<std::size_t>(properties.limits.nonCoherentAtomSize);
+            std::size_t aligned_offset = offset;
+            std::size_t aligned_size = (size == VK_WHOLE_SIZE) ? m_desc.size : size;
+            if (atom_size > 0) {
+                aligned_offset = offset - (offset % atom_size);
+                std::size_t end = offset + aligned_size;
+                aligned_size = end - aligned_offset;
+                if (aligned_size % atom_size != 0) {
+                    aligned_size += atom_size - (aligned_size % atom_size);
+                }
+                if (aligned_offset + aligned_size > m_desc.size) {
+                    aligned_size = m_desc.size - aligned_offset;
+                }
+            }
             VkMappedMemoryRange range{};
             range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
             range.memory = m_memory;
-            range.offset = offset;
-            range.size = (size == VK_WHOLE_SIZE) ? m_desc.size : size;
+            range.offset = aligned_offset;
+            range.size = aligned_size;
             vkFlushMappedMemoryRanges(m_device, 1, &range);
         }
     }
@@ -299,11 +321,27 @@ namespace mango::graphics::vk
     {
         // Only needed for cached memory (gpu2cpu)
         if (m_desc.memory == Memory_Type::gpu2cpu) {
+            VkPhysicalDeviceProperties properties{};
+            vkGetPhysicalDeviceProperties(m_physical_device, &properties);
+            std::size_t atom_size = static_cast<std::size_t>(properties.limits.nonCoherentAtomSize);
+            std::size_t aligned_offset = offset;
+            std::size_t aligned_size = (size == VK_WHOLE_SIZE) ? m_desc.size : size;
+            if (atom_size > 0) {
+                aligned_offset = offset - (offset % atom_size);
+                std::size_t end = offset + aligned_size;
+                aligned_size = end - aligned_offset;
+                if (aligned_size % atom_size != 0) {
+                    aligned_size += atom_size - (aligned_size % atom_size);
+                }
+                if (aligned_offset + aligned_size > m_desc.size) {
+                    aligned_size = m_desc.size - aligned_offset;
+                }
+            }
             VkMappedMemoryRange range{};
             range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
             range.memory = m_memory;
-            range.offset = offset;
-            range.size = (size == VK_WHOLE_SIZE) ? m_desc.size : size;
+            range.offset = aligned_offset;
+            range.size = aligned_size;
             vkInvalidateMappedMemoryRanges(m_device, 1, &range);
         }
     }

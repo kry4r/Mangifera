@@ -1,3 +1,7 @@
+﻿#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
 #include "vk-texture.hpp"
 #include "vulkan-command-execution/vk-command-buffer.hpp"
 #include "vk-buffer.hpp"
@@ -407,12 +411,9 @@ namespace mango::graphics::vk
         }
     }
 
-    // ... 保持其他辅助函数不变 (to_vk_format, to_vk_image_type, 等等) ...
-    // (这些函数保持原样，不需要修改)
 
     auto Vk_Texture::to_vk_format(Texture_Format format) const -> VkFormat
     {
-        // ... 保持原实现 ...
         switch (format) {
             case Texture_Format::r8:      return VK_FORMAT_R8_UNORM;
             case Texture_Format::r16f:    return VK_FORMAT_R16_SFLOAT;
@@ -498,6 +499,10 @@ namespace mango::graphics::vk
             } else {
                 flags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
             }
+        }
+
+        if (m_desc.storage) {
+            flags |= VK_IMAGE_USAGE_STORAGE_BIT;
         }
 
         if (m_desc.mip_levels > 1) {

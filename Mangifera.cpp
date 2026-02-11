@@ -18,12 +18,8 @@ protected:
     void on_init() override
     {
         UH_INFO("Test application initialized");
-
-        // Set up custom render callback for black screen
-        get_renderer()->set_render_callback([this](graphics::Command_Buffer_Handle cmd) {
-            // Currently we just clear to black (done by render pass)
-            // Later we can add geometry rendering here
-        });
+        // Base class init_renderer() already sets the correct render callback
+        // that calls render_scene() + render_imgui() with proper ImGui frame lifecycle.
     }
 
     void on_update(float delta_time) override
@@ -41,8 +37,6 @@ protected:
 
     void on_render() override
     {
-        // Custom rendering will go here
-        // For now, the renderer just clears to black
     }
 
     void on_window_resize(uint32_t width, uint32_t height) override
@@ -60,7 +54,7 @@ int main(int argc, char** argv)
 {
     // Configure logger
     auto& logger = core::UkaLogger::instance();
-    logger.set_level(core::LogLevel::INFO);
+    logger.set_level(core::LogLevel::UKA_INFO);
     logger.set_console_output(true);
     logger.set_file_output(true);
     logger.set_color_output(true);

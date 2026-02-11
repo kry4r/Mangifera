@@ -78,6 +78,7 @@ namespace mango::graphics::vk
         m_state = Command_Buffer_State::initial;
         m_current_pipeline = VK_NULL_HANDLE;
         m_current_pipeline_layout = VK_NULL_HANDLE;
+        m_current_push_constant_stages = VK_SHADER_STAGE_ALL;
     }
 
     // ========== Render pass control ==========
@@ -168,6 +169,8 @@ namespace mango::graphics::vk
                 m_current_bind_point = VK_PIPELINE_BIND_POINT_GRAPHICS;
                 m_current_pipeline = vk_graphics->get_vk_pipeline();
                 m_current_pipeline_layout = vk_graphics->get_vk_pipeline_layout();
+                auto stages = vk_graphics->get_push_constant_stages();
+                m_current_push_constant_stages = stages ? stages : VK_SHADER_STAGE_ALL;
                 vkCmdBindPipeline(m_command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_current_pipeline);
             }
         } else if (type == Pipeline_Type::compute) {
@@ -176,6 +179,8 @@ namespace mango::graphics::vk
                 m_current_bind_point = VK_PIPELINE_BIND_POINT_COMPUTE;
                 m_current_pipeline = vk_compute->get_vk_pipeline();
                 m_current_pipeline_layout = vk_compute->get_vk_pipeline_layout();
+                auto stages = vk_compute->get_push_constant_stages();
+                m_current_push_constant_stages = stages ? stages : VK_SHADER_STAGE_ALL;
                 vkCmdBindPipeline(m_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_current_pipeline);
             }
         } else if (type == Pipeline_Type::raytracing) {
@@ -578,10 +583,7 @@ namespace mango::graphics::vk
             return;
         }
 
-        // Assume all shader stages for now
-        VkShaderStageFlags stage_flags = VK_SHADER_STAGE_ALL;
-
-        vkCmdPushConstants(m_command_buffer, m_current_pipeline_layout, stage_flags, offset, size, data);
+        vkCmdPushConstants(m_command_buffer, m_current_pipeline_layout, m_current_push_constant_stages, offset, size, data);
     }
 
     // ========== Secondary command buffer execution ==========
@@ -638,6 +640,7 @@ namespace mango::graphics::vk
         m_state = Command_Buffer_State::initial;
         m_current_pipeline = VK_NULL_HANDLE;
         m_current_pipeline_layout = VK_NULL_HANDLE;
+        m_current_push_constant_stages = VK_SHADER_STAGE_ALL;
     }
 
 } // namespace mango::graphics::vk

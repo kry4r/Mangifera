@@ -1,0 +1,55 @@
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0, rgba16f) uniform writeonly imageCube sky_map;
+
+vec3 cube_dir(uint face, vec2 uv)
+{
+    vec2 st = uv * 2.0 - 1.0;
+    switch (face) {
+        case 0: return normalize(vec3( 1.0,  -st.y, -st.x));
+        case 1: return normalize(vec3(-1.0,  -st.y,  st.x));
+        case 2: return normalize(vec3( st.x,  1.0,   st.y));
+        case 3: return normalize(vec3( st.x, -1.0,  -st.y));
+        case 4: return normalize(vec3( st.x, -st.y,  1.0));
+        case 5: return normalize(vec3(-st.x, -st.y, -1.0));
+    }
+    return vec3(0.0);
+}
+
+void main()
+{
+    ivec2 size = imageSize(sky_map);
+    ivec3 coord = ivec3(gl_GlobalInvocationID.xyz);
+    if (coord.x >= size.x || coord.y >= size.y || coord.z >= 6) return;
+
+    vec2 uv = (vec2(coord.xy) + 0.5) / vec2(size);
+    vec3 dir = cube_dir(uint(coord.z), uv);
+
+    // Simple procedural sky
+    float y = dir.y;
+
+    // Sky gradient: blue at top, lighter at horizon
+    vec3 sky_top = vec3(0.15, 0.3, 0.8);
+    vec3 sky_horizon = vec3(0.6, 0.75, 0.95);
+    vec3 ground = vec3(0.2, 0.18, 0.15);
+
+    vec3 color;
+    if (y > 0.0) {
+        float t = pow(y, 0.5);
+        color = mix(sky_horizon, sky_top, t);
+
+        // Sun disc
+        vec3 sun_dir = normalize(vec3(-0.4, 0.6, -0.2));
+        float sun_dot = max(dot(dir, sun_dir), 0.0);
+        color += vec3(1.0, 0.95, 0.8) * pow(sun_dot, 256.0) * 10.0;
+        // Sun glow
+        color += vec3(1.0, 0.8, 0.5) * pow(sun_dot, 8.0) * 0.3;
+    } else {
+        float t = clamp(-y * 5.0, 0.0, 1.0);
+        color = mix(sky_horizon * 0.5, ground, t);
+    }
+
+    imageStore(sky_map, coord, vec4(color, 1.0));
+}
