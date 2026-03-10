@@ -14,6 +14,8 @@
 #include "sync/fence.hpp"
 #include "sync/semaphore.hpp"
 #include "manager/scene-graph.hpp"
+#include "render_core/frame_pipeline.hpp"
+#include "render_core/render_targets.hpp"
 #include <memory>
 #include <vector>
 #include <functional>
@@ -158,6 +160,10 @@ namespace mango::app
         RenderCallback pre_render_callback_;   // Shadow pass
         RenderCallback post_process_callback_; // Compute post-processing
         RenderCallback imgui_render_callback_; // ImGui overlay
+
+        // Frame orchestration
+        Frame_Pipeline frame_pipeline_{};
+        Render_Targets render_targets_{};
 
         // Flags
         bool swapchain_needs_recreation_ = false;

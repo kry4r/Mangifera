@@ -12,8 +12,8 @@ message(STATUS "Vulkan include: ${Vulkan_INCLUDE_DIRS}")
 message(STATUS "Vulkan library: ${Vulkan_LIBRARIES}")
 
 add_subdirectory(3rdparty/glm)
-add_subdirectory(3rdparty/imgui)
 add_subdirectory(3rdparty/glfw)
+include(cmake/add_imgui.cmake)
 
 set(MANGO_3RDPARTY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty)
 
@@ -49,6 +49,9 @@ add_subdirectory(3rdparty/shaderc)
 add_subdirectory(core)
 add_subdirectory(graphics)
 add_subdirectory(app)
+
+enable_testing()
+add_subdirectory(tests)
 
 #file(GLOB CORE_SOURCES "core/**/*.cpp")
 

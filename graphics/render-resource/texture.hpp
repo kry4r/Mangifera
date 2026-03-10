@@ -72,6 +72,10 @@ namespace mango::graphics
         bool sampled = true;
         bool render_target = false;
         bool storage = false;  // For compute shader read/write (VK_IMAGE_USAGE_STORAGE_BIT)
+        bool transient = false;
+        bool aliasable = false;
+        bool exportable = false;
+        std::string debug_name;
     };
 
     class Texture {

@@ -13,6 +13,7 @@
 #include "ibl/ibl_generator.hpp"
 #include "post_process/post_process_manager.hpp"
 #include "physics/physics_world.hpp"
+#include "render_core/run_mode.hpp"
 #include <vulkan/vulkan.h>
 #include <memory>
 #include <chrono>
@@ -33,6 +34,7 @@ namespace mango::app
         Graphics_Backend graphics_backend = Graphics_Backend::Vulkan;
         uint32_t target_fps = 60;
         uint32_t max_frames_in_flight = 2;
+        Run_Mode run_mode = Run_Mode::runtime;
     };
 
     class Application

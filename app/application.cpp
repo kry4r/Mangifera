@@ -104,6 +104,9 @@ namespace mango::app
     void Application::init()
     {
         UH_INFO("Initializing application...");
+        if (desc_.run_mode == Run_Mode::headless) {
+            UH_INFO("Application configured for headless compatibility mode");
+        }
 
         // Initialize timing
         start_time_ = Clock::now();
@@ -269,6 +272,9 @@ namespace mango::app
         }
 
         UH_INFO("Entering main loop...");
+        if (desc_.run_mode == Run_Mode::headless) {
+            UH_INFO("Application main loop is running in headless compatibility mode");
+        }
 
         try {
             main_loop();

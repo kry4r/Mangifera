@@ -16,6 +16,35 @@
 #include "vulkan-pipeline-state/vk-compute-pipeline-state.hpp"
 #include "log/historiographer.hpp"
 #include <set>
+#include <cstring>
+
+namespace
+{
+    auto supports_api_version(uint32_t api_version, uint32_t required_major, uint32_t required_minor) -> bool
+    {
+        const auto api_major = VK_API_VERSION_MAJOR(api_version);
+        const auto api_minor = VK_API_VERSION_MINOR(api_version);
+        return api_major > required_major || (api_major == required_major && api_minor >= required_minor);
+    }
+
+    auto has_device_extension(VkPhysicalDevice physical_device, const char* extension_name) -> bool
+    {
+        uint32_t extension_count = 0;
+        vkEnumerateDeviceExtensionProperties(physical_device, nullptr, &extension_count, nullptr);
+
+        std::vector<VkExtensionProperties> available_extensions(extension_count);
+        vkEnumerateDeviceExtensionProperties(physical_device, nullptr, &extension_count, available_extensions.data());
+
+        for (const auto& extension : available_extensions) {
+            if (std::strcmp(extension.extensionName, extension_name) == 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
+
 namespace mango::graphics::vk
 {
     static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
@@ -66,6 +95,7 @@ namespace mango::graphics::vk
             setup_debug_messenger();
             pick_physical_device(desc);
             find_queue_families();
+            query_capabilities();
             create_logical_device(desc);
 
             UH_INFO("Vulkan device created successfully");
@@ -252,6 +282,58 @@ namespace mango::graphics::vk
             m_graphics_family, m_compute_family, m_transfer_family);
     }
 
+    auto Vk_Device::query_ray_tracing_support() const -> bool
+    {
+        const bool has_required_extensions =
+            has_device_extension(m_physical_device, VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) &&
+            has_device_extension(m_physical_device, VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME) &&
+            has_device_extension(m_physical_device, VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME) &&
+            has_device_extension(m_physical_device, VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
+
+        if (!has_required_extensions) {
+            return false;
+        }
+
+        VkPhysicalDeviceBufferDeviceAddressFeatures buffer_device_address_features{};
+        buffer_device_address_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
+
+        VkPhysicalDeviceAccelerationStructureFeaturesKHR acceleration_structure_features{};
+        acceleration_structure_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+        acceleration_structure_features.pNext = &buffer_device_address_features;
+
+        VkPhysicalDeviceRayTracingPipelineFeaturesKHR ray_tracing_pipeline_features{};
+        ray_tracing_pipeline_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
+        ray_tracing_pipeline_features.pNext = &acceleration_structure_features;
+
+        VkPhysicalDeviceFeatures2 features{};
+        features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+        features.pNext = &ray_tracing_pipeline_features;
+        vkGetPhysicalDeviceFeatures2(m_physical_device, &features);
+
+        return buffer_device_address_features.bufferDeviceAddress == VK_TRUE
+            && acceleration_structure_features.accelerationStructure == VK_TRUE
+            && ray_tracing_pipeline_features.rayTracingPipeline == VK_TRUE;
+    }
+
+    void Vk_Device::query_capabilities()
+    {
+        m_capabilities.graphics_queue_count = m_graphics_family != UINT32_MAX ? 1u : 0u;
+        m_capabilities.compute_queue_count = m_compute_family != UINT32_MAX ? 1u : 0u;
+        m_capabilities.transfer_queue_count = m_transfer_family != UINT32_MAX ? 1u : 0u;
+
+        const auto api_version = m_device_properties.apiVersion;
+        const bool vulkan_12 = supports_api_version(api_version, 1, 2);
+        const bool vulkan_13 = supports_api_version(api_version, 1, 3);
+
+        m_capabilities.timeline_semaphore_supported =
+            vulkan_12 || has_device_extension(m_physical_device, VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME);
+        m_capabilities.descriptor_indexing_supported =
+            vulkan_12 || has_device_extension(m_physical_device, VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+        m_capabilities.dynamic_rendering_supported =
+            vulkan_13 || has_device_extension(m_physical_device, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+        m_capabilities.ray_tracing_supported = query_ray_tracing_support();
+    }
+
     void Vk_Device::create_logical_device(const Device_Desc& desc)
     {
         std::set<uint32_t> unique_queue_families = {
@@ -292,9 +374,30 @@ namespace mango::graphics::vk
         timeline_features.timelineSemaphore = VK_TRUE;
         timeline_features.pNext = nullptr;
 
+        VkPhysicalDeviceBufferDeviceAddressFeatures buffer_device_address_features{};
+        buffer_device_address_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
+        buffer_device_address_features.bufferDeviceAddress = VK_TRUE;
+        buffer_device_address_features.pNext = nullptr;
+
+        VkPhysicalDeviceAccelerationStructureFeaturesKHR acceleration_structure_features{};
+        acceleration_structure_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+        acceleration_structure_features.accelerationStructure = VK_TRUE;
+        acceleration_structure_features.pNext = &buffer_device_address_features;
+
+        VkPhysicalDeviceRayTracingPipelineFeaturesKHR ray_tracing_pipeline_features{};
+        ray_tracing_pipeline_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
+        ray_tracing_pipeline_features.rayTracingPipeline = VK_TRUE;
+        ray_tracing_pipeline_features.pNext = &acceleration_structure_features;
+
+        void* device_feature_chain = &timeline_features;
+        if (m_enable_raytracing && m_capabilities.ray_tracing_supported) {
+            timeline_features.pNext = &ray_tracing_pipeline_features;
+            device_feature_chain = &timeline_features;
+        }
+
         VkDeviceCreateInfo create_info{};
         create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        create_info.pNext = &timeline_features;  // Chain timeline semaphore features
+        create_info.pNext = device_feature_chain;
         create_info.queueCreateInfoCount = static_cast<uint32_t>(queue_create_infos.size());
         create_info.pQueueCreateInfos = queue_create_infos.data();
         create_info.pEnabledFeatures = &device_features;
@@ -308,7 +411,7 @@ namespace mango::graphics::vk
         device_extensions.push_back("VK_KHR_portability_subset");
         #endif
 
-        if (m_enable_raytracing) {
+        if (m_enable_raytracing && m_capabilities.ray_tracing_supported) {
             device_extensions.push_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
             device_extensions.push_back(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
             device_extensions.push_back(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);

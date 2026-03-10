@@ -540,73 +540,117 @@ namespace mango::app
 
         auto& cmd = command_buffers_[current_frame_];
 
-        // === Phase 1: Pre-render (shadow pass) ===
-        if (pre_render_callback_) {
-            pre_render_callback_(cmd);
-        }
+        Frame_Context context{};
+        context.frame_index = current_frame_;
+        context.width = width_;
+        context.height = height_;
+        context.mode = Run_Mode::runtime;
+        context.outputs = render_targets_.outputs;
 
-        // === Phase 2: Scene render pass (to offscreen HDR + G-buffer) ===
-        cmd->begin_render_pass(
-            scene_render_pass_,
-            scene_framebuffer_,
-            width_,
-            height_
-        );
+        const auto graph = frame_pipeline_.build_graph(context, device_->get_capabilities());
+        const auto order = graph.compile();
 
-        cmd->set_viewport(0.0f, 0.0f,
-            static_cast<float>(width_),
-            static_cast<float>(height_));
-        cmd->set_scissor(0, 0, width_, height_);
+        bool blit_render_pass_open = false;
 
-        if (render_callback_) {
-            render_callback_(cmd);
-        }
-
-        cmd->end_render_pass();
-
-        // === Phase 3: Post-processing (compute dispatches) ===
-        // Reset passthrough — post_process_callback will set it if compute post-processing runs
-        blit_passthrough_ = false;
-        if (post_process_callback_) {
-            post_process_callback_(cmd);
-        }
-
-        // === Phase 4: Final blit to swapchain + ImGui ===
-        cmd->begin_render_pass(
-            blit_render_pass_,
-            blit_framebuffers_[current_image_index_],
-            width_,
-            height_
-        );
-
-        cmd->set_viewport(0.0f, 0.0f,
-            static_cast<float>(width_),
-            static_cast<float>(height_));
-        cmd->set_scissor(0, 0, width_, height_);
-
-        // Draw fullscreen blit (HDR -> swapchain with tone mapping + gamma)
-        if (blit_pipeline_ && blit_set_) {
-            cmd->bind_pipeline(blit_pipeline_);
-            cmd->bind_descriptor_set(0, blit_set_);
-
-            Blit_Push_Constants pc = blit_pc_;
-            if (blit_passthrough_) {
-                pc.tone_map_mode = 2; // passthrough: compute post-process already applied
+        const auto run_pre_render = [&]() {
+            if (pre_render_callback_) {
+                pre_render_callback_(cmd);
             }
-            cmd->push_constants(0, sizeof(Blit_Push_Constants), &pc);
-            cmd->draw(3, 1, 0, 0); // Fullscreen triangle
+        };
+
+        const auto run_scene_render = [&]() {
+            cmd->begin_render_pass(
+                scene_render_pass_,
+                scene_framebuffer_,
+                width_,
+                height_
+            );
+
+            cmd->set_viewport(0.0f, 0.0f,
+                static_cast<float>(width_),
+                static_cast<float>(height_));
+            cmd->set_scissor(0, 0, width_, height_);
+
+            if (render_callback_) {
+                render_callback_(cmd);
+            }
+
+            cmd->end_render_pass();
+        };
+
+        const auto run_post_process = [&]() {
+            blit_passthrough_ = false;
+            if (post_process_callback_) {
+                post_process_callback_(cmd);
+            }
+        };
+
+        const auto ensure_blit_render_pass = [&]() {
+            if (blit_render_pass_open) {
+                return;
+            }
+
+            cmd->begin_render_pass(
+                blit_render_pass_,
+                blit_framebuffers_[current_image_index_],
+                width_,
+                height_
+            );
+
+            cmd->set_viewport(0.0f, 0.0f,
+                static_cast<float>(width_),
+                static_cast<float>(height_));
+            cmd->set_scissor(0, 0, width_, height_);
+            blit_render_pass_open = true;
+        };
+
+        const auto run_final_blit = [&]() {
+            ensure_blit_render_pass();
+
+            if (blit_pipeline_ && blit_set_) {
+                cmd->bind_pipeline(blit_pipeline_);
+                cmd->bind_descriptor_set(0, blit_set_);
+
+                Blit_Push_Constants pc = blit_pc_;
+                if (blit_passthrough_) {
+                    pc.tone_map_mode = 2;
+                }
+                cmd->push_constants(0, sizeof(Blit_Push_Constants), &pc);
+                cmd->draw(3, 1, 0, 0);
+            }
+        };
+
+        const auto run_imgui = [&]() {
+            ensure_blit_render_pass();
+            if (imgui_render_callback_) {
+                imgui_render_callback_(cmd);
+            }
+        };
+
+        for (const auto& pass_name : order) {
+            if (pass_name == "pre_render") {
+                run_pre_render();
+            }
+            else if (pass_name == "scene_render") {
+                run_scene_render();
+            }
+            else if (pass_name == "post_process") {
+                run_post_process();
+            }
+            else if (pass_name == "final_blit") {
+                run_final_blit();
+            }
+            else if (pass_name == "imgui") {
+                run_imgui();
+            }
         }
 
-        // ImGui overlay
-        if (imgui_render_callback_) {
-            imgui_render_callback_(cmd);
+        if (blit_render_pass_open) {
+            cmd->end_render_pass();
         }
-
-        cmd->end_render_pass();
 
         end_frame();
     }
-
     auto Renderer::get_current_command_buffer() -> graphics::Command_Buffer_Handle
     {
         if (!frame_started_) {

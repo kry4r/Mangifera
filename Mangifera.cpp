@@ -1,8 +1,11 @@
 // app/main.cpp
 #include "app/application.hpp"
+#include "app/headless/headless_runner.hpp"
 #include "log/historiographer.hpp"
+#include <algorithm>
 #include <exception>
 #include <iostream>
+#include <string>
 
 using namespace mango;
 
@@ -52,6 +55,18 @@ protected:
 
 int main(int argc, char** argv)
 {
+    bool headless = false;
+    uint32_t headless_frames = 1;
+    for (int index = 1; index < argc; ++index) {
+        const std::string arg = argv[index];
+        if (arg == "--headless") {
+            headless = true;
+        }
+        else if (arg == "--frames" && index + 1 < argc) {
+            headless_frames = static_cast<uint32_t>((std::max)(std::stoi(argv[++index]), 1));
+        }
+    }
+
     // Configure logger
     auto& logger = core::UkaLogger::instance();
     logger.set_level(core::LogLevel::UKA_INFO);
@@ -63,6 +78,17 @@ int main(int argc, char** argv)
     UH_INFO("=== Mango Engine - Black Window Test ===");
 
     try {
+        if (headless) {
+            UH_INFO("Launching headless runner");
+            app::Headless_Run_Options options{};
+            options.frames = headless_frames;
+
+            app::Headless_Runner runner;
+            const int result = runner.run(options);
+            logger.flush();
+            return result;
+        }
+
         // Create application descriptor
         app::Application_Desc app_desc{};
         app_desc.title = "Mango Engine - Test Window";
@@ -73,6 +99,7 @@ int main(int argc, char** argv)
         app_desc.resizable = true;
         app_desc.graphics_backend = app::Graphics_Backend::Vulkan;
         app_desc.max_frames_in_flight = 2;
+        app_desc.run_mode = app::Run_Mode::runtime;
 
         // Create and run application
         Test_Application app(app_desc);

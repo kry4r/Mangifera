@@ -26,6 +26,9 @@ namespace mango::graphics
         std::size_t size = 0;
         Buffer_Type usage = Buffer_Type::vertex;
         Memory_Type memory = Memory_Type::gpu_only;
+        bool transient = false;
+        bool exportable = false;
+        std::string debug_name;
     };
 
     struct Buffer

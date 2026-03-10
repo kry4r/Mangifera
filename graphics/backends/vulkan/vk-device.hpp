@@ -41,6 +41,7 @@ namespace mango::graphics::vk
         // ========== Device queries ==========
         uint32_t get_queue_family_count() const override;
         std::vector<Queue_Type> get_supported_queues() const override;
+        auto get_capabilities() const -> const Device_Capabilities& override { return m_capabilities; }
 
         void wait_idle() override;
 
@@ -76,11 +77,13 @@ namespace mango::graphics::vk
         void pick_physical_device(const Device_Desc& desc);
         void create_logical_device(const Device_Desc& desc);
         void find_queue_families();
+        void query_capabilities();
 
         // ========== Helper methods ==========
         bool is_device_suitable(VkPhysicalDevice device);
         bool check_validation_layer_support();
         std::vector<const char*> get_required_extensions();
+        auto query_ray_tracing_support() const -> bool;
 
         // ========== Cleanup ==========
         void cleanup();
@@ -101,6 +104,7 @@ namespace mango::graphics::vk
         VkPhysicalDeviceProperties m_device_properties{};
         VkPhysicalDeviceFeatures m_device_features{};
         VkPhysicalDeviceMemoryProperties m_memory_properties{};
+        Device_Capabilities m_capabilities{};
 
         VkQueue m_graphics_queue = VK_NULL_HANDLE;
         VkQueue m_compute_queue = VK_NULL_HANDLE;

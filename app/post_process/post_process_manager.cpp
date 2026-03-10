@@ -1,4 +1,7 @@
 #include "post_process_manager.hpp"
+#include "render_features/passes/post/bloom_pass.hpp"
+#include "render_features/passes/post/tonemap_pass.hpp"
+#include "render_features/passes/sensor_export_pass.hpp"
 #include "utils/shader-compiler.hpp"
 #include "backends/vulkan/vulkan-render-resource/vk-buffer.hpp"
 #include "backends/vulkan/vk-device.hpp"
@@ -1089,6 +1092,27 @@ namespace mango::app
     auto Post_Process_Manager::get_output_texture() -> graphics::Texture_Handle
     {
         return (ready_ && output_texture_) ? output_texture_ : nullptr;
+    }
+
+    void Post_Process_Manager::register_graph_passes(Render_Graph& graph, const Frame_Context& context) const
+    {
+        Bloom_Pass bloom{};
+        Tonemap_Pass tonemap{};
+        Sensor_Export_Pass sensor_export{};
+
+        bloom.add_to_graph(graph);
+
+        if (context.outputs.depth
+            || context.outputs.normal
+            || context.outputs.segmentation
+            || context.outputs.instance_id
+            || context.outputs.motion_vector) {
+            sensor_export.add_to_graph(graph);
+        }
+
+        if (context.outputs.rgb) {
+            tonemap.add_to_graph(graph);
+        }
     }
 
     void Post_Process_Manager::render_settings_ui()

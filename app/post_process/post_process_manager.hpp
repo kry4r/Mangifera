@@ -8,6 +8,8 @@
 #include "render-resource/sampler.hpp"
 #include "render-resource/buffer.hpp"
 #include "pipeline-state/compute-pipeline-state.hpp"
+#include "render_core/frame_context.hpp"
+#include "render_core/render_graph.hpp"
 #include <memory>
 #include <cstdint>
 #include <vector>
@@ -76,6 +78,7 @@ namespace mango::app
                      graphics::Texture_Handle gbuffer_normal);
 
         void render_settings_ui();
+        void register_graph_passes(Render_Graph& graph, const Frame_Context& context) const;
 
         auto get_settings() -> Post_Process_Settings& { return settings_; }
         auto get_settings() const -> const Post_Process_Settings& { return settings_; }

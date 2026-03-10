@@ -19,6 +19,7 @@
 #include "render-resource/descriptor-set.hpp"
 #include "sync/fence.hpp"
 #include "sync/semaphore.hpp"
+#include "capabilities/device-capabilities.hpp"
 
 namespace mango::graphics
 {
@@ -57,6 +58,8 @@ namespace mango::graphics
         // Device-level queries
         virtual uint32_t get_queue_family_count() const = 0;
         virtual std::vector<Queue_Type> get_supported_queues() const = 0;
+        virtual auto get_capabilities() const -> const Device_Capabilities& = 0;
+        auto supports_ray_tracing() const -> bool { return get_capabilities().ray_tracing_supported; }
 
         virtual Descriptor_Set_Layout_Handle create_descriptor_set_layout(
             const Descriptor_Set_Layout_Desc& desc) = 0;
